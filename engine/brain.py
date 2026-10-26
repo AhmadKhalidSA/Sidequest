@@ -2,7 +2,9 @@
 Agent SDK, so it runs on the Claude Code subscription (no API key).
 
 reply() streams the answer as an ordered list of items:
-    ("say", sentence)   -> TTS
+    ("say", sentence)   -> TTS (the main voice)
+    ("say:B", sentence) -> TTS in the co-host's voice ("B: ..." lines);
+                           "say:C" is a role-play character ("C: ...")
     ("board", {...})    -> whiteboard command, fired when the voice reaches it
     ("tool", label)     -> status line ("Reading ipv4.pdf")
 Speech and board commands come from ONE stream, so they are in sync by
@@ -30,25 +32,43 @@ from claude_agent_sdk import (
     ToolUseBlock,
 )
 
+import config
 from prompts import DIRECTOR_PROMPT, PLANNER_PROMPT, SYSTEM_PROMPT
 
 _SENTENCE_END = re.compile(r"[.!?…]['\")\]]?(\s|$)")
 _MAX_CHUNK = 220
 _MD = re.compile(r"[*_`#~|]|^\s*[-•]\s+", re.MULTILINE)
 _FENCE = re.compile(r"^\s*```\w*\s*$")
+# "B: ..." / "C: ..." at the start of a speech line: another voice says it.
+_SPEAKER = re.compile(r"[ \t]*([BC]):[ \t]+")
+_MAYBE_SPEAKER = re.compile(r"[ \t]*([BC]:?)?")
 
 
 def log(*a) -> None:
     print(*a, file=sys.stderr, flush=True)
 
 
+def prompt_file(name: str, text: str) -> dict:
+    """A system prompt handed to Claude Code as a file. Passed inline, the
+    tutor's prompt alone runs past Windows' 32,767-character command-line
+    limit and the CLI never starts."""
+    path = config.ROOT / "cache" / "prompts" / f"{name}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists() or path.read_text(encoding="utf-8") != text:
+        path.write_text(text, encoding="utf-8")
+    return {"type": "file", "path": str(path)}
+
+
 class StreamSplitter:
     """Turns raw text deltas into say/board items. A line starting with '@'
     is a board command (held until its newline arrives). Anything else is
-    speech, flushed sentence by sentence so TTS starts before the line ends."""
+    speech, flushed sentence by sentence so TTS starts before the line ends.
+    A speech line starting "B:" or "C:" belongs to another voice."""
 
     def __init__(self) -> None:
         self.buf = ""
+        self.speaker = ""         # voice of the speech line being read
+        self._line_start = True
         self._dec = json.JSONDecoder()
         self._joins = 0   # lines glued onto a command whose JSON broke
         self.last_error = ""
@@ -58,7 +78,9 @@ class StreamSplitter:
         return self._drain(final=False)
 
     def flush(self) -> list[tuple]:
-        return self._drain(final=True)
+        items = self._drain(final=True)
+        self._line_start = True
+        return items
 
     def _drain(self, final: bool) -> list[tuple]:
         items: list[tuple] = []
@@ -97,8 +119,18 @@ class StreamSplitter:
                         f"{line[:120]} ... {line[-120:]}")
                 self._joins = 0
                 self.buf = rest
+                self._line_start = True
                 items.extend(cmds)
                 continue
+            if self._line_start:
+                m = _SPEAKER.match(self.buf)
+                if (m is None and not final and "\n" not in self.buf
+                        and _MAYBE_SPEAKER.fullmatch(self.buf)):
+                    break   # might be the start of "B: ": wait for more
+                self.speaker = m.group(1) if m else ""
+                if m:
+                    self.buf = self.buf[m.end():]
+                self._line_start = False
             nl = self.buf.find("\n")
             line = self.buf if nl < 0 else self.buf[:nl]
             at = line.find("@{")
@@ -109,6 +141,7 @@ class StreamSplitter:
             if nl >= 0:
                 items.extend(self._speech(line, final=True)[0])
                 self.buf = self.buf[nl + 1:]
+                self._line_start = True
                 continue
             said, rest = self._speech(line, final=final)
             items.extend(said)
@@ -134,7 +167,8 @@ class StreamSplitter:
                 break
             chunk = _MD.sub("", chunk).strip()
             if chunk:
-                out.append(("say", chunk))
+                out.append(("say:" + self.speaker if self.speaker else "say",
+                            chunk))
             if not text:
                 break
         return out, text
@@ -201,7 +235,7 @@ class Planner:
         self.model = model or brain.get("plannerModel", "opus")
         self._options = ClaudeAgentOptions(
             model=self.model,
-            system_prompt=PLANNER_PROMPT,
+            system_prompt=prompt_file("planner", PLANNER_PROMPT),
             tools=["Read", "Glob", "Grep", "Write", "WebSearch", "WebFetch"],
             allowed_tools=["Read", "Glob", "Grep", "Write", "WebSearch",
                            "WebFetch"],
@@ -260,7 +294,7 @@ class Director:
         brain = cfg.get("brain", {})
         self._options = ClaudeAgentOptions(
             model=brain.get("directorModel", "sonnet"),
-            system_prompt=DIRECTOR_PROMPT,
+            system_prompt=prompt_file("illustrator", DIRECTOR_PROMPT),
             tools=[],
             allowed_tools=[],
             cwd=str(cwd),
@@ -322,7 +356,7 @@ class Tutor:
         brain = cfg.get("brain", {})
         self._options = ClaudeAgentOptions(
             model=brain.get("model", "sonnet"),
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=prompt_file("tutor", SYSTEM_PROMPT),
             # Files in the course folder (material, plan, notes), screenshots
             # (Read handles images), and the web for anything current.
             tools=["Read", "Glob", "Grep", "Write", "Edit", "WebSearch",

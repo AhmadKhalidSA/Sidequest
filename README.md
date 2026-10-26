@@ -27,15 +27,74 @@ studying for, how to run AI models locally, or the notes you drop on it.
 | ![Hand-drawn marks: underline, box, circle, highlight, strike-through](docs/images/marks-and-cursor.png) | **Hand-drawn feel.** Sketchy strokes animate in. Real photos and screenshots appear when they help (from Wikipedia and Wikimedia Commons). Math renders with KaTeX and flowcharts with Mermaid, and the motion shows how things work. |
 | ![The course index](docs/images/course-index.png) | **Index and progress.** Every section, its goal, what's done and what's next. Click to jump. Next time it resumes where you left off, and re-asks the questions you missed. |
 
-Also included:
+### Made for playing while you learn
 
-- **Your own material.** Drag in PDFs, notes or images, or paste a table of contents, and it
-  teaches from that. It can also go page by page with your book ("page 12: TCP flags...").
-- **"Look at my screen."** It takes a screenshot and talks about what you're seeing.
-- **Lecture or Wait mode.** Lecture keeps teaching while you're quiet, and the next chunk is
-  prepared while the current one plays. Wait answers, then waits for you.
-- **Made for mid-game.** It's click-through and never steals focus. Everything works by voice
-  or by a hotkey, and it docks to a corner or goes full screen.
+- **Pauses for fights.** While a full-screen game is in front, it watches how fast you're
+  pressing keys and how much the screen is moving, and holds the lesson until things calm
+  down. After a long fight it picks up with "So, where was I". Say *"this is a break"* on a
+  respawn or queue screen and it remembers that screen for that game.
+- **Fight mode.** Press **F6** or say *"busy"*: it stops teaching new things and only asks
+  quick one-word recall questions until you say *"I'm free"*.
+- **Missed something?** *"Show that again"* brings back the previous board. *"What did I miss?"*
+  gets a short recap of what it said while you were busy.
+- **Starts instantly.** The session's opening is prepared in the background when the app
+  launches, so *"let's start"* begins at once.
+- **Click-through and voice-first.** It never steals focus. Everything works by voice or a
+  hotkey, and it docks to a corner or goes full screen.
+
+### Makes it stick
+
+- **Memory deck.** Every checkpoint question becomes a flashcard, scheduled with
+  [FSRS](https://github.com/open-spaced-repetition/py-fsrs) (the algorithm Anki uses). Each
+  session opens with what's due: *"4 to review, about 2 minutes, day 12"*. Say *"export to
+  Anki"* to take the deck to your phone.
+- **Guess first.** Each section opens with a question you can't answer yet; the section then
+  answers it.
+- **Explain it back, then beat the boss.** Each section ends with you explaining it while it
+  ticks off the key points you covered. Then comes a 5-question boss fight with an HP bar.
+- **Sure or guess.** Add "sure" or "guess" to an answer. Confident mistakes come back soonest.
+- **Ranks and a streak.** Each section earns Bronze, Silver, Gold and Diamond only from what
+  you can recall on later days. Ranks get rusty when reviews are overdue. The streak forgives
+  rest days you pick, and one missed day a week if you review the next day. *"That's it for
+  today"* shows a session card.
+
+### Fun modes
+
+| Say | What you get |
+|---|---|
+| *"Bring in the co-host"* | A second voice joins: asks "wait, why?", jokes, and gets things wrong for you to fix. |
+| *"Put me in it"* | Role-play: a scene where the topic gets used (an interview, ordering food, a support call), with a character voice and a debrief. |
+| *"Let me teach you"* | It plays the student and you teach it. |
+| *"Make me work for it"* | It asks instead of telling, with stronger hints each time. *"Just tell me"* switches back. |
+| *"Quick-fire"* | 60 seconds, 5 one-word questions, with a streak counter. |
+| *"Harder"* / *"easier"* / *"more jokes"* / *"be serious"* | Difficulty and humour dials. It remembers them. |
+| *"Slow down"* / *"speed up"* / *"other voice"* | Voice speed and voice. |
+
+Settings also has four personalities: lively explainer, hype coach, dry-witted expert, and calm
+storyteller.
+
+### More on the board
+
+Live simulations it codes on the spot (physics, sorting, epidemics, markets), graphs with
+sliders it moves as it talks, maps with routes, sheet music that plays, molecule diagrams, and
+Python code that really runs, one line at a time, with its variables. The simulations and the
+Python run sandboxed, with no network and no access to your files.
+
+### Arabic and English
+
+It teaches in English or Arabic: it follows the language you speak, or you pick one in
+Settings. Set *Language you speak* to *Both* so it understands you in either. Arabic is spoken
+by [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (Modern Standard Arabic,
+five female and five male voices, on the CPU), and the board lays Arabic out right to left.
+For language practice it can say a phrase, have you repeat it, and score your pronunciation
+word by word and sound by sound. The sound-by-sound scoring is decent for English and rough
+for Arabic.
+
+### Bring anything
+
+Drag in PDFs, Word, PowerPoint, Excel, EPUB, web pages, notes or images, or paste a table of
+contents. Paste a YouTube link into the question box (F8) and it teaches the video from its
+transcript. It can also go page by page with your book ("page 12: TCP flags...").
 
 ---
 
@@ -50,7 +109,8 @@ Also included:
     text, so watch your usage in the
     [Anthropic Console](https://console.anthropic.com/).
 - **[Python 3.11+](https://www.python.org/downloads/)** and **[Node.js 18+](https://nodejs.org/)**.
-- **Disk space:** about 3 GB for Python packages, Electron and the speech models.
+- **Disk space:** about 4 GB for Python packages, Electron and the speech and voice models,
+  plus 1.6 GB if you speak Arabic (a multilingual speech model, downloaded on first use).
 - **Optional: an NVIDIA GPU.** Speech recognition takes about 0.3 s on a GPU (about 1.5 GB of
   VRAM) instead of 1–2 s on the CPU. The voice always runs on the CPU.
 
@@ -67,7 +127,9 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 1. Creates a Python virtual environment in `.venv` and installs `requirements.txt`. If it finds
    an NVIDIA GPU, it adds the CUDA libraries.
 2. Runs `npm install` for the Electron overlay.
-3. Downloads the Kokoro voice model (about 350 MB) into `models/`.
+3. Downloads the voices into `models/`: Kokoro for English (about 350 MB), Supertonic 3 for
+   Arabic (about 400 MB), and a pronunciation model (about 240 MB). The last two are
+   optional: if a download fails, Sidequest runs without that feature.
 4. Tells you how to sign in to Claude (next section).
 
 ### Connect your Claude account
@@ -115,14 +177,23 @@ a size and corner first.
 | *"Full screen"* / *"dock it"* | Fills the screen, or snaps back to its corner. |
 | *"Which one?"* / *"zoom in on that"* | Highlights or zooms the exact thing on the board. |
 | *"Stop listening"* | Mutes its ears. The lesson keeps going. |
+| *"Busy"* / *"I'm free"* | Fight mode on and off. |
+| *"Show that again"* / *"back to now"* | The previous board, and back. |
+| *"What did I miss?"* | A short recap of what you missed. |
+| *"This is a break"* | Remembers the screen in front of you as downtime for this game. |
+| *"That's it for today"* | Session card and goodbye. |
+
+Common commands also work in Arabic: *"وقف"* pauses, *"كمل"* continues, *"مشغول"* is fight
+mode, and *"وش فاتني"* recaps what you missed.
 
 ### Keys and buttons
 
 | Key | Button | What it does |
 |---|---|---|
 | **Mouse 5** | Mic | Mute or unmute its ears, for example during team voice chat. |
+| **F6** | ⚔ | Fight mode: quick recall questions only, until you press it again. |
 | **F7** | Lecture / Wait | Toggles the talk mode. |
-| **F8** | | Gives the panel focus and opens the controls: course picker, Start, Quiz me, Repeat, Recap, Next section, Pause, a box to type questions, size, corner and opacity. Esc closes it. |
+| **F8** | | Gives the panel focus and opens the controls: course picker, Start, Quiz me, Repeat, Recap, Next section, Pause, every mode above as a button, a box to type questions or paste a link, size, corner and opacity. Esc closes it. |
 | **F9** | | Hides or shows the panel. |
 | **F10** | ⤢ | Full screen. Press again to go back. |
 | | Index | The course index. Click a section to jump there. |
@@ -139,8 +210,9 @@ Press F8, click **+ New**, and name a course. Then do either of these:
 
 - **Index → Course outline:** paste the table of contents from your book or syllabus. Topic
   names are enough.
-- **Drag files onto the panel:** PDF, Markdown, text or images. Convert .pptx or .docx to PDF
-  first.
+- **Drag files onto the panel:** PDF, Word, PowerPoint, Excel, EPUB, HTML, Markdown, text or
+  images.
+- **Paste a YouTube link** into the question box.
 
 Then say *"let's start"*. A planner designs the course in the background (30–60 s) while the
 tutor chats with you, then it teaches section by section, with a checkpoint question every few
@@ -150,7 +222,9 @@ Each course is a folder in `courses/` with plain files you can read or edit:
 
 - `plan.json`: the sections, goals and checkpoint questions.
 - `progress.json`: where you are, and your quiz score.
-- `notes.md`: what you know, what you struggle with, and a review queue of missed questions.
+- `notes.md`: what you know and what you struggle with.
+
+Your memory deck, streak and remembered break screens live in `courses/.sidequest/`.
 
 ---
 
@@ -166,10 +240,20 @@ ones:
 | `brain.directorModel` | `sonnet` | The illustrator that builds animated scenes. |
 | `lesson.prebufferSeconds` | `8` | How far ahead it prepares speech and drawings before it starts talking. `0` starts faster but the board may lag. |
 | `lesson.followAlong` | `true` | The pointer that tracks the current sentence. |
+| `lesson.teachLanguage` | `auto` | `auto` answers in the language you speak; or `en` / `ar`. |
+| `lesson.persona` | `default` | `hype`, `dry` or `calm`. |
+| `lesson.difficulty` / `lesson.humor` | `3` / `3` | 1–5. Also set by voice. |
+| `lesson.cohost` | `false` | The second voice. |
+| `lesson.warmStart` | `true` | Prepares the session opening at launch (one background turn per launch). |
+| `lesson.restDays` | `[]` | Weekdays that don't break the streak, e.g. `["Fri"]`. |
+| `lull.auto` / `lull.fightAt` | `true` / `0.6` | Pause during fights, and how easily. Lower pauses sooner. |
 | `audio.endSilenceMs` | `1600` | How long a pause means you've finished. Raise it if it cuts you off. |
-| `stt.model` / `stt.device` | `distil-large-v3` / `auto` | On a weak GPU, or to leave the GPU to your game, use `"model": "small.en", "device": "cpu"`. To speak in a language other than English, use `large-v3`. |
+| `stt.model` / `stt.device` | `distil-large-v3` / `auto` | On a weak GPU, or to leave the GPU to your game, use `"model": "small.en", "device": "cpu"`. |
+| `stt.language` | `en` | `ar` or `auto` (Arabic and English). Either switches to a multilingual model by itself. |
 | `tts.voice` / `tts.speed` | `af_heart` / `1.0` | Any Kokoro voice: `am_adam`, `bf_emma`, `bm_george`... |
-| `keys.*` | `MOUSE5`, `F7`–`F10` | Also `MOUSE4`, `MOUSE3`, `F1`–`F24`, letters, `INSERT`, `NUMPAD0`... |
+| `tts.voice2` / `tts.voice3` | `bf_emma` / `am_michael` | The co-host's voice, and role-play characters'. |
+| `tts.arabicVoice` | `""` | `F1`–`F5` or `M1`–`M5`; `""` picks one to match each English voice. |
+| `keys.*` | `MOUSE5`, `F6`–`F10` | Also `MOUSE4`, `MOUSE3`, `F1`–`F24`, letters, `INSERT`, `NUMPAD0`... `""` leaves a key unbound. |
 | `mirror.enabled` | `false` | Serves the board to a phone, tablet or second monitor on your network. |
 | `modelsDir` | `models/` | Where the Kokoro voice files live. |
 | `python` | `.venv` | The Python that runs the engine. |
@@ -207,6 +291,12 @@ mic ─► Silero VAD + Smart Turn ─► faster-whisper (local) ─► Claude t
   [rough.js](https://roughjs.com/), [GSAP](https://gsap.com/), [KaTeX](https://katex.org/) and
   [Mermaid](https://mermaid.js.org/). It also places content without overlaps and keeps the
   camera framed on it.
+- **Memory deck.** Each graded answer updates a card's FSRS schedule. Section ranks and the
+  streak are worked out from the same review log, and the session card is built locally,
+  without a Claude call.
+- **Fight detection.** A background thread polls key states (like the hotkeys) and compares
+  tiny 48x27 grey screenshots twice a second, only while a full-screen window is in front.
+  Nothing is saved except the break screens you mark.
 - **Plain window.** The overlay is a separate transparent window. There's no injection into
   the game, no reading of game memory, and no input automation.
 
@@ -218,6 +308,7 @@ mic ─► Silero VAD + Smart Turn ─► faster-whisper (local) ─► Claude t
   it to look at, all through your Claude account.
 - **Goes to public image services:** short search words only, to Wikipedia, Wikimedia Commons,
   Openverse and Iconify, to find images and icons.
+- **Goes to YouTube:** only when you paste a link, to fetch that video's transcript.
 - **Never committed to git:** your `config.json`, `courses/`, `logs/` and `cache/` are in
   `.gitignore`.
 
@@ -233,5 +324,9 @@ mic ─► Silero VAD + Smart Turn ─► faster-whisper (local) ─► Claude t
   *Mic on*.
 - **It cuts you off mid-thought:** raise `audio.endSilenceMs` in Settings.
 - **Speech recognition is slow:** without an NVIDIA GPU, set `stt.model` to `small.en`.
+- **It pauses when you're not fighting, or talks through fights:** move *Fight sensitivity* in
+  Settings, or turn *Pause during fights* off and use F6.
+- **"Couldn't get that video's transcript":** the video has no captions, or YouTube blocked
+  the request.
 - **"Kokoro voice model not found":** run `setup.ps1` again; it downloads into `models/`.
 - **Anything else:** right-click the tray icon, then **Open engine log** (`logs/engine.log`).

@@ -50,6 +50,8 @@ def vk(name: str) -> int:
 
 
 def pretty(name: str) -> str:
+    if not name:
+        return "(none)"
     return _PRETTY.get(str(name).upper(), str(name).upper())
 
 
@@ -59,7 +61,8 @@ class KeyWatcher:
 
     def __init__(self, bindings: dict[str, str],
                  on_event: Callable[[str, bool], None]) -> None:
-        self._codes = {action: vk(name) for action, name in bindings.items()}
+        self._codes = {action: vk(name) for action, name in bindings.items()
+                       if name}            # "" = unbound
         self._on_event = on_event
         self._state = {action: False for action in self._codes}
         self._stop = threading.Event()

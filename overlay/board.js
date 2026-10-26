@@ -104,6 +104,59 @@ function richText(s) {
   }).join('');
 }
 
+// Right-to-left text (Arabic, Hebrew...). An element whose own text is mostly
+// RTL letters gets dir="rtl": bidi order, shaping and start (right) alignment.
+// A mostly-LTR line with an RTL word keeps LTR; the browser orders the
+// embedded run. Numbers and symbols don't vote. English boards never get past
+// the first test.
+const RTL_RE = /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}]/u;
+const LETTER_RE = /\p{L}/u;
+function plainText(node) {   // the readable text, without KaTeX or SVG internals
+  let s = '';
+  for (const c of node.childNodes) {
+    if (c.nodeType === 3) s += c.data;
+    else if (c.nodeType === 1 && !c.classList.contains('katex') && c.localName !== 'svg') s += plainText(c);
+  }
+  return s;
+}
+function textDir(s) {   // 'rtl' | 'ltr' | null (no letters)
+  let r = 0, l = 0, first = null;
+  for (const ch of String(s ?? '')) {
+    if (!LETTER_RE.test(ch)) continue;
+    const rtl = RTL_RE.test(ch);
+    if (rtl) r++; else l++;
+    first = first || (rtl ? 'rtl' : 'ltr');
+  }
+  return r > l ? 'rtl' : r < l ? 'ltr' : first;
+}
+const BIDI_BLOCKS = 'div, p, li, th, td, caption, figcaption, h1, h2, h3, h4, blockquote, .note, [data-bidi]';
+function applyBidi(el) {
+  if (!el || !RTL_RE.test(el.textContent || '') || el.matches('pre, svg')) return;
+  if (!el.hasAttribute('dir') && textDir(plainText(el)) === 'rtl') el.dir = 'rtl';
+  // Inner blocks (table cells, card lines) that read the other way get their own dir.
+  for (const node of el.querySelectorAll(BIDI_BLOCKS)) {
+    if (node.hasAttribute('dir') || node.closest('.katex, pre, code, .term')) continue;
+    const d = textDir(plainText(node));
+    const inherited = node.parentElement.closest('[dir]')?.dir || 'ltr';
+    if (d && d !== inherited) node.dir = d;
+  }
+  if (el.localName === 'table') {
+    // A table whose cells are mostly RTL flows right to left (first column on the right).
+    let r = 0, l = 0;
+    for (const c of el.querySelectorAll('th, td')) {
+      const d = textDir(plainText(c));
+      if (d === 'rtl') r++; else if (d === 'ltr') l++;
+    }
+    if (r > l && el.dir !== 'rtl') {
+      el.dir = 'rtl';
+      for (const c of el.querySelectorAll('th[dir=rtl], td[dir=rtl]')) c.removeAttribute('dir');
+      for (const c of el.querySelectorAll('th:not([dir]), td:not([dir])')) {
+        if (textDir(plainText(c)) === 'ltr') c.dir = 'ltr';
+      }
+    }
+  }
+}
+
 // Safe expression compiler for plots: + - * / ^, implicit multiplication,
 // a whitelist of functions and constants. No eval.
 function compileExpr(src) {
@@ -381,6 +434,7 @@ class Board {
   addHtml(el, delay = 0) {
     el.classList.add('el');
     el.style.animationDelay = `${delay}ms`;
+    applyBidi(el);   // before anyone measures it
     this.layer.appendChild(el);
     return el;
   }
@@ -450,6 +504,7 @@ class Board {
 
   // ------------------------------------------------------------------ ops
   op_clear(cmd) {
+    this.beforeClear?.(cmd);   // board_extras.js keeps a frozen copy for rewind
     for (const rec of this.els.values()) if (rec.anno) { try { rec.anno.remove(); } catch { /* gone */ } }
     for (const n of [...this.svg.childNodes, ...this.layer.childNodes, ...this.head.childNodes]) this.fadeOut(n);
     this.els.clear();
@@ -490,6 +545,7 @@ class Board {
     const v = document.createElement('div');
     v.className = 'veil';
     v.innerHTML = `<div class="veil-q">${escapeHtml(text)}</div><div class="veil-dots"><i></i><i></i><i></i></div>`;
+    applyBidi(v.firstElementChild);
     this.root.appendChild(v);
     this.veilEl = v;
   }
@@ -872,6 +928,16 @@ class Board {
     el.style.animationDelay = `${delay}ms`;
     const bbox = this.place(el, { x: list.x, y: list.nextY, size: list.size, color: colorName || list.color });
     el.style.animationDelay = `${delay}ms`;
+    if (el.dir === 'rtl') {
+      // Right-to-left points share a right edge, so their bullets line up.
+      list.right = Math.max(list.right || 0, bbox.x + bbox.w);
+      for (let i = 1; i <= list.n + 1; i++) {
+        const r = i <= list.n ? this.els.get(`${list.id}${i}`) : { bbox, nodes: [el] };
+        if (!r || r.nodes[0].dir !== 'rtl') continue;
+        r.bbox.x = list.right - r.bbox.w;
+        r.nodes[0].style.left = `${r.bbox.x}px`;
+      }
+    }
     list.n += 1;
     list.nextY = bbox.y + bbox.h + Math.round(list.size * 0.45);
     this.register(`${list.id}${list.n}`, { nodes: [el], bbox });

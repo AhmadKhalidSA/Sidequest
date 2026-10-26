@@ -51,6 +51,43 @@ foreach ($f in @('kokoro-v1.0.onnx', 'voices-v1.0.bin')) {
   Move-Item "models\$f.part" "models\$f"
 }
 
+# Optional downloads: if one fails, Sidequest still runs (English voice only,
+# or word-level pronunciation feedback only), so setup carries on.
+function Get-Files($label, $base, $dir, $files) {
+  try {
+    foreach ($src in $files.Keys) {
+      $dest = Join-Path $dir $files[$src]
+      if (Test-Path $dest) { continue }
+      New-Item -ItemType Directory -Force (Split-Path $dest) | Out-Null
+      Write-Host "Downloading $label $src ..."
+      Invoke-WebRequest "$base/$src" -OutFile "$dest.part"
+      Move-Item -Force "$dest.part" $dest
+    }
+    Write-Host "$label ready in $dir"
+  } catch {
+    Write-Warning "$label download failed ($_). Re-run setup.ps1 later to retry."
+  }
+}
+
+# 3b. Arabic voice (Supertonic 3 by Supertone, ~400 MB, OpenRAIL-M weights) ---
+Step 'Arabic voice'
+$stFiles = [ordered]@{}
+foreach ($f in @('LICENSE', 'onnx/tts.json', 'onnx/unicode_indexer.json',
+                 'onnx/duration_predictor.onnx', 'onnx/text_encoder.onnx',
+                 'onnx/vector_estimator.onnx', 'onnx/vocoder.onnx')) { $stFiles[$f] = $f }
+foreach ($v in @('F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5')) {
+  $stFiles["voice_styles/$v.json"] = "voice_styles/$v.json"
+}
+Get-Files 'Supertonic 3' `
+  'https://huggingface.co/Supertone/supertonic-3/resolve/3cadd1ee6394adea1bd021217a0e650ede09a323' `
+  'models\supertonic-3' $stFiles
+
+# 3c. Pronunciation model (wav2vec2 phonemes, 4-bit ONNX, ~240 MB, Apache-2.0)
+Step 'Pronunciation model'
+Get-Files 'Phoneme model' `
+  'https://huggingface.co/onnx-community/wav2vec2-lv-60-espeak-cv-ft-ONNX/resolve/c69750f5043e5e1f8a71ab95dd3b98338c280c92' `
+  'models\phoneme' ([ordered]@{ 'onnx/model_q4.onnx' = 'model.onnx'; 'vocab.json' = 'vocab.json' })
+
 # 4. Claude sign-in ------------------------------------------------------------
 Step 'Claude'
 if (Get-Command claude -ErrorAction SilentlyContinue) {

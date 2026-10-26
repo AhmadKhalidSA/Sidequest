@@ -9,10 +9,18 @@
     "demo": "set ELECTRON_RUN_AS_NODE=&& electron . --demo"
   },
   "dependencies": {
+    "abcjs": "^6.7.2",
+    "d3-geo": "^3.1.1",
     "gsap": "^3.15.0",
+    "jsxgraph": "^1.14.1",
     "katex": "^0.19.1",
+    "matter-js": "^0.20.0",
     "mermaid": "^12.2.0",
-    "roughjs": "^4.6.6"
+    "pyodide": "^314.0.7",
+    "roughjs": "^4.6.6",
+    "smiles-drawer": "^2.4.1",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
   },
   "devDependencies": {
     "electron": "^45.0.0"

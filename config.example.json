@@ -1,10 +1,12 @@
 {
+  "modelsDir": "",
   "keys": {
     "mute": "MOUSE5",
     "interact": "F8",
     "hide": "F9",
     "big": "F10",
-    "mode": "F7"
+    "mode": "F7",
+    "busy": "F6"
   },
   "brain": {
     "model": "sonnet",
@@ -19,16 +21,41 @@
     "prebufferSeconds": 8,
     "prebufferVisuals": 3,
     "visualWaitSeconds": 6,
-    "followAlong": true
+    "followAlong": true,
+    "warmStart": true,
+    "cohost": false,
+    "persona": "default",
+    "difficulty": 3,
+    "humor": 3,
+    "teachLanguage": "auto",
+    "restDays": []
+  },
+  "lull": {
+    "auto": true,
+    "fightAt": 0.6,
+    "calmAt": 0.3
   },
   "stt": {
     "model": "distil-large-v3",
     "device": "auto",
-    "language": "en"
+    "language": "en",
+    "autoLanguages": [
+      "en",
+      "ar"
+    ],
+    "multilingualModel": "large-v3-turbo"
   },
   "tts": {
+    "engine": "kokoro",
     "voice": "af_heart",
-    "speed": 1.0
+    "speed": 1.0,
+    "voice2": "bf_emma",
+    "voice3": "am_michael",
+    "arabic": true,
+    "arabicVoice": "",
+    "arabicDir": "",
+    "arabicThreads": 4,
+    "arabicSteps": 5
   },
   "audio": {
     "inputDevice": null,

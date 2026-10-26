@@ -6,6 +6,7 @@
   <title>Sidequest</title>
   <link rel="stylesheet" href="../node_modules/katex/dist/katex.min.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="features.css">
 </head>
 <body>
   <div id="panel">
@@ -17,6 +18,8 @@
       <span id="planning" hidden>Planning...</span>
       <span id="section" title="Lesson progress"></span>
       <span id="score" title="Checkpoint questions right / asked"></span>
+      <span id="deckChip" title="Study streak (days) and cards due for review"></span>
+      <button id="busyBtn" class="hot hbtn icon" title="Fight mode (F6, or say &quot;busy&quot;): quick questions only, until you say &quot;I'm free&quot;">&#x2694;</button>
       <button id="modeBtn" class="hot hbtn" title="Lecture: keeps teaching while you're quiet. Wait: answers, then waits for you.">Lecture</button>
       <button id="indexBtn" class="hot hbtn" title="Course index: every section, what's done, what's next">Index</button>
       <button id="micBtn" class="hot hbtn on" title="Mic on/off (Mouse 5). The lesson keeps going either way.">Mic on</button>
@@ -82,6 +85,22 @@
           <button id="drawerIndex" title="See every section">Index</button>
           <button id="drawerOutline" title="Paste your course headers">Course outline</button>
         </div>
+        <div class="row buttons">
+          <button data-btn="rapid" title="60 seconds, 5 one-word questions (or say: quick-fire)">Quick-fire</button>
+          <button data-btn="roleplay" title="Act out a scene where this gets used (or say: put me in it)">Role-play</button>
+          <button data-btn="teachback" data-toggle="teachback" title="You teach, it plays the student (or say: let me teach you)">Teach-back</button>
+          <button data-btn="socratic" data-toggle="socratic" title="It asks instead of telling (or say: make me work for it)">Make me work</button>
+          <button data-btn="cohost" data-toggle="cohost" title="A second voice joins the lesson (or say: bring in the co-host)">Co-host</button>
+          <button data-btn="busy" data-toggle="busy" title="Quick recall only while you fight (F6, or say: busy / I'm free)">Fight mode</button>
+        </div>
+        <div class="row buttons">
+          <button data-btn="missed" title="Recap what you missed (or say: what did I miss?)">What did I miss?</button>
+          <button data-btn="rewind" title="Show the previous board (or say: show that again)">&#x23EE; Last board</button>
+          <button data-btn="live" title="Back to the current board (or say: back to now)">Back to now</button>
+          <button data-btn="break" title="Remember the screen in front of you as a break (respawn, queue, lobby), so it teaches there">This is a break</button>
+          <button data-btn="anki" title="Save every review card as an Anki deck (or say: export to Anki)">Export to Anki</button>
+          <button data-btn="end" title="Session summary and goodbye (or say: that's it for today)">End session</button>
+        </div>
         <div class="row">
           <input id="ask" placeholder="Type a question and press Enter" autocomplete="off">
           <button id="muteBtn" title="Stop the tutor hearing you (e.g. for team voice chat)">Mute mic</button>
@@ -103,8 +122,8 @@
     </div>
 
     <div id="sub">
-      <div id="heard"></div>
-      <div id="caption"></div>
+      <div id="heard" dir="auto"></div>
+      <div id="caption" dir="auto"></div>
     </div>
 
     <div id="settings" hidden>
@@ -124,6 +143,8 @@
   <script src="../node_modules/gsap/dist/MotionPathPlugin.min.js"></script>
   <script src="../node_modules/mermaid/dist/mermaid.min.js"></script>
   <script src="board.js"></script>
+  <script src="board_libs.js"></script>
+  <script src="board_extras.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -19,6 +19,8 @@ let keys = { mute: 'Mouse 5', interact: 'F8', hide: 'F9' };
 let earsOn = true;
 let plan = null;
 let progress = null;
+let ranks = {};
+const toggles = { teachback: false, socratic: false, cohost: false, busy: false };
 let outline = '';
 let interactive = false;
 let state = 'loading';
@@ -119,7 +121,10 @@ function renderIndex() {
     if (n === cur) li.classList.add('current');
     const mark = li.classList.contains('done') ? '✓' : n === cur ? '▶' : `${n}`;
     const steps = (s.steps || []).map(escapeHtml).join(' · ');
-    li.innerHTML = `<span class="num">${mark}</span><span class="t">${escapeHtml(s.title || '')}</span>` +
+    const r = ranks[n];
+    const badge = r && r.rank !== 'New'
+      ? `<span class="rank ${r.rank.toLowerCase()}${r.rusty ? ' rusty' : ''}" title="${r.rusty ? 'Reviews overdue: rusty' : 'Rank from what you can recall'}">${r.rank}</span>` : '';
+    li.innerHTML = `<span class="num">${mark}</span><span class="t">${escapeHtml(s.title || '')}${badge}</span>` +
       (s.goal ? `<span class="g">${escapeHtml(s.goal)}</span>` : '') +
       (steps ? `<span class="steps">${steps}</span>` : '');
     li.title = 'Jump to this section';
@@ -155,10 +160,30 @@ const SETTINGS = [
       options: [[true, 'Lecture: keeps teaching while you\'re quiet'], [false, 'Wait: answers, then waits for you']] },
     { path: 'lesson.autoContinueSeconds', label: 'Quiet seconds before it continues', type: 'number', min: 1, max: 30, step: 1, help: 'Lecture mode only' },
     { path: 'lesson.maxAutoChunks', label: 'Stop after this many chunks without hearing you', type: 'number', min: 0, max: 99, step: 1, help: '0 = never stop (until you talk)' },
+    { path: 'lesson.teachLanguage', label: 'Teaching language', type: 'select',
+      options: [['auto', 'Follow me (the language I speak)'], ['en', 'English'], ['ar', 'Arabic']] },
+    { path: 'lesson.persona', label: 'Tutor personality', type: 'select',
+      options: [['default', 'Lively explainer'], ['hype', 'Hype coach'], ['dry', 'Dry-witted expert'], ['calm', 'Calm storyteller']] },
+    { path: 'lesson.difficulty', label: 'Difficulty', type: 'range', min: 1, max: 5, step: 1, help: 'Or say "harder" / "easier"' },
+    { path: 'lesson.humor', label: 'Humour', type: 'range', min: 1, max: 5, step: 1, help: 'Or say "more jokes" / "be serious"' },
+    { path: 'lesson.cohost', label: 'Co-host', type: 'select', help: 'A second voice that asks, jokes and gets things wrong for you to fix',
+      options: [[false, 'Off'], [true, 'On']] },
+    { path: 'lesson.warmStart', label: 'Prepare the opening at launch', type: 'select', help: 'So "let\'s start" begins instantly',
+      options: [[true, 'On'], [false, 'Off']] },
+    { path: 'lesson.restDays', label: 'Rest days (streak-safe)', type: 'list', help: 'e.g. Fri, or Fri, Sat' },
+  ]],
+  ['Fights', [
+    { path: 'lull.auto', label: 'Pause during fights', type: 'select', help: 'Watches key presses and screen motion while a full-screen game is in front',
+      options: [[true, 'On'], [false, 'Off']] },
+    { path: 'lull.fightAt', label: 'Fight sensitivity', type: 'range', min: 0.3, max: 0.9, step: 0.05, help: 'Lower = pauses more easily' },
+    { path: 'keys.busy', label: 'Fight mode key', type: 'text', help: 'Quick questions only, until you press it again' },
   ]],
   ['Voice', [
     { path: 'tts.voice', label: 'Voice', type: 'select', options: 'voices', help: 'af_ / bf_ = female, am_ / bm_ = male (b = British)' },
     { path: 'tts.speed', label: 'Speaking speed', type: 'range', min: 0.7, max: 1.6, step: 0.05 },
+    { path: 'tts.voice2', label: 'Co-host voice', type: 'select', options: 'voices' },
+    { path: 'tts.voice3', label: 'Role-play character voice', type: 'select', options: 'voices' },
+    { path: 'tts.arabicVoice', label: 'Arabic voice', type: 'select', options: 'arabicVoices', help: 'F = female, M = male. Automatic matches each English voice' },
   ]],
   ['Listening', [
     { path: 'audio.endSilenceMs', label: 'Pause that ends your sentence (ms)', type: 'number', min: 300, max: 3000, step: 50, help: 'Raise it if it cuts you off mid-thought' },
@@ -175,7 +200,10 @@ const SETTINGS = [
     { path: 'brain.directorModel', label: 'Illustrator model', type: 'select', help: 'Builds the rich animated scenes in the background',
       options: [['sonnet', 'Sonnet (balanced)'], ['opus', 'Opus (richest, slower)'], ['haiku', 'Haiku (fastest)']] },
     { path: 'stt.model', label: 'Speech recognition model', type: 'select', help: 'Needs an engine restart',
-      options: [['distil-large-v3', 'distil-large-v3 (accurate)'], ['small.en', 'small.en (light)'], ['base.en', 'base.en (lightest)'], ['large-v3', 'large-v3 (multilingual)']] },
+      options: [['distil-large-v3', 'distil-large-v3 (English, accurate)'], ['small.en', 'small.en (English, light)'], ['base.en', 'base.en (English, lightest)'],
+        ['large-v3-turbo', 'large-v3-turbo (Arabic + English)'], ['large-v3', 'large-v3 (multilingual, slow)']] },
+    { path: 'stt.language', label: 'Language you speak', type: 'select', help: 'Arabic switches to a multilingual model by itself. Needs an engine restart',
+      options: [['en', 'English'], ['ar', 'Arabic'], ['auto', 'Both (Arabic and English)']] },
     { path: 'stt.device', label: 'Speech recognition runs on', type: 'select', help: 'Needs an engine restart',
       options: [['auto', 'GPU if available'], ['cpu', 'CPU (leave the GPU to the game)']] },
   ]],
@@ -227,7 +255,9 @@ function renderSettings() {
         input.addEventListener('click', () => bridge.ui({ corner: uiState.corner || 'tr' }));
       } else if (row.type === 'select') {
         input = document.createElement('select');
-        const opts = row.options === 'voices' ? settingsData.voices.map((v) => [v, v]) : row.options;
+        const opts = row.options === 'voices' ? settingsData.voices.map((v) => [v, v])
+          : row.options === 'arabicVoices' ? [['', 'Automatic'], ...(settingsData.arabicVoices || []).map((v) => [v, v])]
+            : row.options;
         for (const [v, text] of opts) {
           const o = document.createElement('option');
           o.value = JSON.stringify(v);
@@ -235,6 +265,10 @@ function renderSettings() {
           if (JSON.stringify(v) === JSON.stringify(value)) o.selected = true;
           input.appendChild(o);
         }
+      } else if (row.type === 'list') {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = (value || []).join(', ');
       } else {
         input = document.createElement('input');
         input.type = row.type;
@@ -274,7 +308,9 @@ function saveSettings() {
     let v;
     if (input.dataset.type === 'select') v = JSON.parse(input.value);
     else if (input.dataset.type === 'number' || input.dataset.type === 'range') v = parseFloat(input.value);
-    else v = input.value.trim().toUpperCase();
+    else if (input.dataset.type === 'list') {
+      v = input.value.split(/[,\s]+/).filter(Boolean).map((d) => d.slice(0, 1).toUpperCase() + d.slice(1, 3).toLowerCase());
+    } else v = input.value.trim().toUpperCase();
     if (JSON.stringify(v) === JSON.stringify(getPath(settingsData.cfg, path))) continue;
     const keys = path.split('.');
     let o = patch;
@@ -335,6 +371,7 @@ function onEngine(ev) {
       $('modeBtn').dataset.auto = ev.auto ? '1' : '';
       break;
     case 'settings':
+      setToggle('cohost', !!ev.cfg?.lesson?.cohost);
       settingsData = ev;
       if (!$('settings').hidden) renderSettings();
       break;
@@ -362,6 +399,31 @@ function onEngine(ev) {
       clearTimeout(captionTimer);
       $('caption').classList.remove('faded');
       $('caption').textContent = ev.text;
+      $('caption').dataset.speaker = ev.speaker || '';
+      break;
+    case 'deck': {
+      const bits = [];
+      if (ev.streak) bits.push(`day ${ev.streak}`);
+      if (ev.due) bits.push(`${ev.due} due`);
+      $('deckChip').textContent = bits.join(' · ');
+      break;
+    }
+    case 'ranks':
+      ranks = ev.ranks || {};
+      if (!$('index').hidden) renderIndex();
+      break;
+    case 'busy':
+      setToggle('busy', !!ev.on);
+      $('busyBtn').classList.toggle('on', !!ev.on);
+      break;
+    case 'lull':
+      document.body.classList.toggle('fight', ev.state === 'fight');
+      $('busyBtn').title = ev.state === 'fight'
+        ? 'A fight is on: the lesson waits. Fight mode (F6): quick questions only'
+        : 'Fight mode (F6, or say "busy"): quick questions only, until you say "I\'m free"';
+      break;
+    case 'modes':
+      for (const k of ['teachback', 'socratic']) setToggle(k, (ev.on || []).includes(k));
       break;
     case 'interrupted':
       $('caption').classList.add('faded');
@@ -375,7 +437,7 @@ function onEngine(ev) {
         $('quiz').hidden = true;
         renderProgress();
       } else {
-        if (cmd.op === 'clear') $('quiz').hidden = true;
+        if (cmd.op === 'clear' || cmd.op === 'sessioncard') $('quiz').hidden = true;
         board.apply(cmd);
       }
       break;
@@ -440,6 +502,11 @@ bridge.ui({ hello: true });
 
 // -------------------------------------------------------------- controls
 $('micBtn').addEventListener('click', () => bridge.send({ cmd: 'mute' }));
+$('busyBtn').addEventListener('click', () => bridge.send({ cmd: 'button', name: 'busy' }));
+function setToggle(name, on) {
+  toggles[name] = on;
+  document.querySelectorAll(`[data-toggle="${name}"]`).forEach((b) => b.classList.toggle('on', on));
+}
 $('screenBtn').addEventListener('click', () => bridge.send({ cmd: 'button', name: 'screen' }));
 $('modeBtn').addEventListener('click', () => bridge.send({ cmd: 'mode', auto: !$('modeBtn').dataset.auto }));
 $('dockBtn').addEventListener('click', () => bridge.ui({ dock: true }));
@@ -466,7 +533,10 @@ $('outlineCancel').addEventListener('click', () => {
 });
 
 document.querySelectorAll('[data-btn]').forEach((b) => {
-  b.addEventListener('click', () => bridge.send({ cmd: 'button', name: b.dataset.btn }));
+  b.addEventListener('click', () => {
+    bridge.send({ cmd: 'button', name: b.dataset.btn });
+    if (b.dataset.toggle === 'cohost') setToggle('cohost', !toggles.cohost);
+  });
 });
 $('course').addEventListener('change', (e) => bridge.send({ cmd: 'course', name: e.target.value }));
 $('newCourseBtn').addEventListener('click', () => { $('newCourse').hidden = false; $('newCourseName').focus(); });

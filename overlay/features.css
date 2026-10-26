@@ -1,0 +1,28 @@
+/* Panel pieces for the lesson features: streak chip, fight mode, ranks in
+   the index, and whose voice the caption is. */
+
+#deckChip { color: var(--amber); font-size: 12px; white-space: nowrap; }
+#deckChip:empty { display: none; }
+
+#busyBtn.on { background: rgba(255, 107, 107, 0.28); border-color: var(--red); color: #fff; }
+/* A fight is on (auto-detected): the lesson waits; say so quietly. */
+body.fight #busyBtn { border-color: var(--red); color: var(--red); }
+body.fight .dot { box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.6); }
+
+#drawer button[data-toggle].on { background: rgba(91, 228, 155, 0.18); border-color: var(--green); }
+
+/* Section ranks in the index. */
+#ixList .rank {
+  margin-left: 8px; padding: 0 7px; border-radius: 9px; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.03em; vertical-align: 1px; border: 1px solid currentColor;
+}
+#ixList .rank.bronze { color: #d99a6c; }
+#ixList .rank.silver { color: #c9d1de; }
+#ixList .rank.gold { color: var(--amber); }
+#ixList .rank.diamond { color: #7fe3ff; }
+#ixList .rank.rusty { border-style: dashed; opacity: 0.75; }
+
+/* Co-host and role-play lines get their own colour in the caption. */
+#caption[data-speaker="B"] { color: var(--purple); }
+#caption[data-speaker="C"] { color: var(--amber); }
+#caption, #heard { unicode-bidi: plaintext; }

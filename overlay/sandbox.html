@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Host for model-written code (board_libs.js loads this as the srcdoc of an
+     iframe with sandbox="allow-scripts": opaque origin, so no access to the
+     overlay page, its preload bridge or Node). The CSP below blocks every
+     network request, including from workers this page starts. The code itself
+     runs in a Worker, never on this page's thread; a watchdog terminates the
+     worker when its heartbeat stops (an infinite loop), so the overlay keeps
+     rendering. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src blob:; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; font-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<script>
+(() => {
+  let worker = null, dog = null, dead = false, last = 0, limit = 3000, maxLimit = 30000;
+  const up = (m) => parent.postMessage(m, '*');
+  const kill = (why) => {
+    if (dead) return;
+    dead = true;
+    clearInterval(dog);
+    if (worker) worker.terminate();
+    worker = null;
+    up({ type: 'dead', why });
+  };
+  addEventListener('message', (e) => {
+    if (e.source !== parent) return;
+    const m = e.data || {};
+    if (m.type === 'boot' && !worker && !dead) {
+      try {
+        worker = new Worker(URL.createObjectURL(new Blob([String(m.src)], { type: 'text/javascript' })));
+      } catch (err) { up({ type: 'error', message: String(err && err.message) }); kill('no worker'); return; }
+      worker.onmessage = (ev) => {
+        const d = ev.data || {};
+        if (d.type === 'beat') {
+          last = performance.now();
+          // A worker about to run one long synchronous job may ask for more time.
+          if (d.limit) limit = Math.min(Number(d.limit) || 3000, maxLimit);
+          return;
+        }
+        up(d);
+      };
+      worker.onerror = (ev) => { ev.preventDefault(); up({ type: 'error', message: String(ev.message || 'worker error') }); };
+      const payload = Object.assign({ type: 'init' }, m.payload || {});
+      const transfer = [];
+      if (m.canvas) {
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(m.canvas.w * m.canvas.k));
+        c.height = Math.max(1, Math.round(m.canvas.h * m.canvas.k));
+        document.body.appendChild(c);
+        payload.canvas = c.transferControlToOffscreen();
+        transfer.push(payload.canvas);
+      }
+      for (const v of Object.values(payload)) if (v instanceof ArrayBuffer) transfer.push(v);
+      limit = Number(m.limit) || 3000;
+      maxLimit = Number(m.maxLimit) || 30000;
+      last = performance.now();
+      worker.postMessage(payload, transfer);
+      dog = setInterval(() => { if (performance.now() - last > limit) kill('timeout'); }, 200);
+    } else if (m.type === 'msg' && worker) {
+      worker.postMessage({ type: 'msg', data: m.data });
+    } else if (m.type === 'kill') {
+      kill('killed');
+    }
+  });
+  up({ type: 'ready' });
+})();
+</script>
+</body>
+</html>

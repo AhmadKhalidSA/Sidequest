@@ -1,7 +1,9 @@
 # Sidequest engine (Python 3.11+, Windows). Installed by setup.ps1.
 claude-agent-sdk==0.2.110      # Claude via your Claude Code login
 faster-whisper==1.1.1          # local speech-to-text
-kokoro-onnx==0.5.0             # local voice
+kokoro-onnx==0.5.0             # local voice (English)
+phonemizer-fork==3.3.2         # (with kokoro-onnx) target sounds for pronunciation
+espeakng-loader==0.2.4
 onnxruntime==1.20.1
 numpy==2.2.6
 sounddevice==0.5.5
@@ -13,6 +15,13 @@ mss==9.0.2                     # "look at my screen"
 pillow==12.3.0
 pywin32==312
 comtypes==1.4.16               # follow the Windows default audio device
+fsrs==6.3.2                    # spaced review scheduling
+genanki==0.13.1                # Anki export
+python-pptx==1.0.2             # dropped .pptx files
+mammoth==1.13.0                # dropped .docx files
+openpyxl==3.1.5                # dropped .xlsx files
+youtube-transcript-api==1.2.4  # "teach me this video"
+requests==2.34.2               # video titles
 
 # Optional: run speech recognition on an NVIDIA GPU (~0.3 s instead of ~1-2 s).
 # setup.ps1 installs these when it finds an NVIDIA card.

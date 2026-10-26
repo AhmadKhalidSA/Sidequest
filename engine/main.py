@@ -40,8 +40,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import config  # noqa: E402
 from keys import KeyWatcher, pretty  # noqa: E402
-from prompts import (BUTTONS, CONTINUE, KICKOFF, NO_MATERIAL_KICKOFF,  # noqa: E402
-                     PLAN_READY, PLANNING_KICKOFF)
+from prompts import (BUTTONS, CONTINUE, KICKOFF, MISSED, MODES,  # noqa: E402
+                     NO_MATERIAL_KICKOFF, PLAN_READY, PLANNING_KICKOFF,
+                     SESSION_END, WARMUP)
 
 # Instant acknowledgements. Real words only: the voice mangles "Mm-hm".
 ACKS = ["Okay.", "Sure.", "Got it.", "Right.", "Okay, one sec.",
@@ -50,7 +51,10 @@ NUDGES = ["One sec, getting it ready.", "Almost there."]
 NUDGE_AFTER = 7.0
 # Board ops that don't draw anything (they don't count as buffered visuals).
 NON_VISUAL = {"clear", "section", "result", "quiz", "erase", "unfocus",
-              "unzoom", "spot"}
+              "unzoom", "spot", "card", "shadow", "tick", "geoset", "simsend",
+              "tstep"}
+# Ops the app consumes itself; they never reach the board.
+APP_OPS = {"card", "shadow"}
 # Ops where the tutor is already pointing at something itself; the
 # follow-along pointer stays out of the way after these.
 POINTING = {"highlight", "focus", "callout", "zoom", "annotate", "pulse", "fx",
@@ -59,41 +63,51 @@ POINTING = {"highlight", "focus", "callout", "zoom", "annotate", "pulse", "fx",
 # (Short, no question, starts with one of these: "yeah", "yes sir", "ok cool".)
 BACKCHANNEL = re.compile(
     r"^(yeah|yes|yep|yup|okay|ok|mm+-?hm+|uh-huh|right|sure|cool|nice|"
-    r"got it|i see|alright|all right|makes sense|true|go on)\b", re.I)
+    r"got it|i see|alright|all right|makes sense|true|go on|"
+    r"ايه|إيه|ايوه|أيوه|اي|تمام|طيب|اها|آها|صح|اوكي|أوكي|زين)(\W|$)", re.I)
 PAUSE = re.compile(r"^((can|could|would) you |please |just )?(pause|stop|wait|"
                    r"hold on|hang on|one sec(ond)?|shut up|be quiet|quiet|"
-                   r"not now)\b", re.I)
+                   r"not now)\b|^(وقف|اسكت|لحظة|استنى|انتظر)(\W|$)", re.I)
 # "see my screen" / "look at this": screenshot the monitor under the cursor.
 SEE_SCREEN = re.compile(
     r"(see|look at|check|read|watch|describe|what'?s on|what is on)\s+"
     r"(my|the|this)\s+(screen|monitor|display)|see what i'?m (seeing|looking"
     r" at)|what am i (seeing|looking at)|\blook at this\b|on my screen", re.I)
 # Hesitation sounds on their own: not a message, keep listening.
-HESITATION = re.compile(r"^(h+m+|m+h*m*|u+h+|u+m+|e+r+m*|a+h+|o+h+)$", re.I)
+HESITATION = re.compile(r"^(h+m+|m+h*m*|u+h+|u+m+|e+r+m*|a+h+|o+h+|"
+                        r"ا+ه+|ا+م+|ء+م+|م+)$", re.I)
+WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)?")   # a word, in any script
 # A sentence ending in one of these is almost certainly unfinished: hold it
 # and merge with what comes next instead of answering half a thought.
 UNFINISHED_END = {"and", "but", "so", "like", "because", "the", "a", "an",
                   "to", "of", "or", "then", "is", "are", "was", "what", "how",
                   "why", "if", "when", "that", "this", "with", "in", "on",
                   "for", "my", "i", "it's", "its", "um", "uh", "hmm", "mm",
-                  "er", "which", "about", "from", "by", "as", "at", "into"}
+                  "er", "which", "about", "from", "by", "as", "at", "into",
+                  "و", "بس", "لأن", "لان", "يعني", "اللي", "عشان", "في", "من",
+                  "على", "إذا", "اذا", "مثل"}
 HOLD_SECONDS = 2.5
 
 
 def hesitation_only(text: str) -> bool:
-    words = re.findall(r"[a-z']+", text.lower())
+    words = WORD.findall(text.lower())
     return not words or all(HESITATION.match(w) for w in words)
+
+
+def fillers(text: str) -> int:
+    return sum(bool(HESITATION.match(w)) for w in WORD.findall(text.lower()))
 
 
 def unfinished(text: str) -> bool:
     t = text.strip()
-    if t.endswith(("...", "…", ",", "-")):
+    if t.endswith(("...", "…", ",", "،", "-")):
         return True
-    words = re.findall(r"[a-z']+", t.lower())
+    words = WORD.findall(t.lower())
     return bool(words) and words[-1] in UNFINISHED_END and not t.endswith(
-        ("?", "!"))
+        ("?", "!", "؟"))
 RESUME = re.compile(r"^(continue|go on|resume|keep going|carry on|go ahead|"
-                    r"unpause|let's go|next)\b", re.I)
+                    r"unpause|let's go|next)\b|^(كمل|كمّل|يلا|استمر)(\W|$)",
+                    re.I)
 START = re.compile(r"^(ok(ay)?[,.!]?\s*)?(so\s+)?(let'?s |lets |can we |shall we )?"
                    r"(start|begin|get started|kick off)\b", re.I)
 # "let's learn about X" / "teach me X" / "new topic: X" -> a course for X, made
@@ -117,6 +131,54 @@ LECTURE_MODE = re.compile(r"^(lecture mode|auto mode|keep teaching|keep talking"
                           r"|talk on your own)\b", re.I)
 WAIT_MODE = re.compile(r"^(wait mode|question mode|q and a mode|wait for me|"
                        r"don't continue|only answer)\b", re.I)
+
+
+def cmd(pattern: str) -> re.Pattern:
+    """A short spoken command: matched at the start, case-insensitive."""
+    return re.compile(rf"^(ok(ay)?[,.!]?\s*)?(please\s+)?(?:{pattern})(\W|$)",
+                      re.I)
+
+
+# Fight mode: quick recall only while the game needs you.
+BUSY_CMD = cmd(r"(i'?m |i am )?(busy|in a fight|fighting)|fight mode|مشغول")
+FREE_CMD = cmd(r"(i'?m |i am )?(free|done fighting|out of the fight)|"
+               r"fight'?s over|فاضي|خلصت")
+REWIND_CMD = cmd(r"show (me )?that again|go back|previous board|"
+                 r"show (me )?the last (board|one|drawing)|rewind|"
+                 r"(show|bring) (it|that) back|ارجع")
+LIVE_CMD = cmd(r"back to (now|live|the lesson)|(go )?forward|show now")
+MISSED_CMD = re.compile(r"what did i miss|catch me up|i missed (that|it)|"
+                        r"وش فاتني|ايش فاتني|شو فاتني", re.I)
+RAPID_CMD = cmd(r"quick ?fire|rapid ?fire|quick round|lightning round|"
+                r"speed round")
+TEACHBACK_ON = cmd(r"let me teach (you|it)|you be the student|teach ?back|"
+                   r"i'?ll teach you|خلني اشرح|خليني اشرح")
+TEACHBACK_OFF = cmd(r"you teach( me)?( again)?|stop teach ?back|"
+                    r"you be the teacher|back to normal")
+SOCRATIC_ON = cmd(r"make me work for it|don'?t tell me|socratic( mode)?|"
+                  r"ask me instead")
+SOCRATIC_OFF = cmd(r"just tell me|tell me the answer|stop asking")
+ROLEPLAY_CMD = cmd(r"put me in it|(let'?s )?role ?play|act it out")
+COHOST_ON = cmd(r"bring in the co-?host|two hosts|podcast mode|"
+                r"add (a |the )?co-?host")
+COHOST_OFF = cmd(r"just you|solo( mode)?|no co-?host|lose the co-?host")
+SLOWER = cmd(r"slow down|(speak|talk) slower|slower")
+FASTER = cmd(r"speed up|(speak|talk) faster|faster")
+OTHER_VOICE = cmd(r"(use )?(an)?other voice|change (your )?voice|"
+                  r"different voice|switch voices?")
+HARDER = cmd(r"make it harder|harder|too easy|challenge me")
+EASIER = cmd(r"make it easier|easier|too hard|simpler")
+FUNNIER = cmd(r"more jokes|be funnier|funnier")
+SERIOUS = cmd(r"be serious|no (more )?jokes|less jokes|fewer jokes")
+END_SESSION = cmd(r"that'?s (it|all) for today|end (the )?session|"
+                  r"i'?m done( for today)?|let'?s stop (here|for today)")
+BREAK_SCREEN = cmd(r"this is a break|this is downtime|learn this screen|"
+                   r"remember this screen")
+EXPORT_ANKI = cmd(r"export (it |this )?(to |my )?(anki|flash ?cards|deck)")
+# "Other voice" cycles through these (Kokoro names).
+VOICE_CYCLE = ["af_heart", "am_michael", "bf_emma", "bm_george", "af_bella"]
+PERSONAS = {"default": "lively explainer", "hype": "hype",
+            "dry": "dry", "calm": "calm"}
 
 
 def quiz_speech(cmd: dict) -> str:
@@ -258,6 +320,33 @@ class Engine:
         self.director = None
         self.director_lock = asyncio.Lock()
         self.scene_n = 0
+        # Memory deck (spaced review), and this session's numbers for the
+        # end-of-session card.
+        self.deck = None
+        self.last_quiz = ""
+        self.pending_grade: dict | None = None   # a @result awaiting its @card
+        self.session = {"start": time.monotonic(), "asked": 0, "correct": 0,
+                        "ranks": {}}
+        # Fight mode (manual, "busy") and the lull meter's automatic pause.
+        self.busy = False
+        self.busy_since = 0.0
+        self.lull = None
+        self.hush = False             # a fight is on: hold lecture content
+        self.hush_since = 0.0
+        self.replay_last = False      # after a long fight, repeat the last line
+        self.turn_auto = False        # the current turn is lecture, not a reply
+        self.rewound = 0              # boards back the learner is looking
+        self.rewind_handle: asyncio.TimerHandle | None = None
+        self.said_log: collections.deque = collections.deque(maxlen=40)
+        self.last_pcm = None
+        self.modes: set[str] = set()  # teachback, socratic
+        self.style_dirty = True       # send the style dials with the next turn
+        self.asked_at = 0.0           # when the last question finished playing
+        self.speech_started_at = 0.0
+        self.shadow: dict | None = None   # a phrase to repeat, being scored
+        self.rapid_handle: asyncio.TimerHandle | None = None
+        self.warm: dict | None = None     # the session opening, made at launch
+        self.warm_dropped = False
 
     # ---------------------------------------------------------- lifecycle
     async def boot(self) -> None:
@@ -269,10 +358,11 @@ class Engine:
                                            config.models_dir(self.cfg))
         self.player = Player(self.cfg["audio"].get("outputDevice"))
         # Instant spoken acknowledgements, ready before anyone speaks.
-        self.acks = await asyncio.to_thread(
-            lambda: [self.tts.synth(t) for t in ACKS])
-        self.nudge_clips = await asyncio.to_thread(
-            lambda: [self.tts.synth(t) for t in NUDGES])
+        await self.make_clips()
+        from deck import Deck
+        self.deck = Deck(config.COURSES / ".sidequest" / "deck.json")
+        import pron
+        pron.set_models_dir(config.models_dir(self.cfg))   # loads on first use
 
         turn = None
         if self.cfg["audio"].get("smartTurn", True):
@@ -318,8 +408,11 @@ class Engine:
         if pick:
             await self.select_course(pick, announce=False)
         self.set_state("idle")
+        self.send_deck()
+        self.start_lull()
         asyncio.create_task(self.meter())
         asyncio.create_task(self.start_director())  # pre-connect the illustrator
+        asyncio.create_task(self.warm_start())
         auto = os.environ.get("SIDEQUEST_AUTOTEXT")
         if auto and courses:
             self.start_turn(auto)
@@ -359,6 +452,151 @@ class Engine:
              stt=self.stt.desc, tts=self.tts.desc,
              model=self.cfg["brain"]["model"])
 
+    # -------------------------------------------------------------- voice
+    def synth(self, text: str, speaker: str = "") -> "object":
+        """TTS in the right voice: "" = the tutor, "B" = the co-host,
+        "C" = a role-play character. Arabic lines go to the Arabic voice
+        inside TTS."""
+        voice = {"B": self.cfg["tts"].get("voice2"),
+                 "C": self.cfg["tts"].get("voice3")}.get(speaker)
+        return self.tts.synth(text, voice) if voice else self.tts.synth(text)
+
+    async def make_clips(self) -> None:
+        self.acks = await asyncio.to_thread(
+            lambda: [self.tts.synth(t) for t in ACKS])
+        self.nudge_clips = await asyncio.to_thread(
+            lambda: [self.tts.synth(t) for t in NUDGES])
+        self.where_clip = await asyncio.to_thread(self.tts.synth,
+                                                  "So, where was I.")
+
+    def set_voice(self, voice: str | None = None,
+                  speed: float | None = None) -> None:
+        if voice:
+            self.tts.set_voice(voice) if hasattr(self.tts, "set_voice") \
+                else setattr(self.tts, "_voice", voice)
+        if speed:
+            self.tts.set_speed(speed) if hasattr(self.tts, "set_speed") \
+                else setattr(self.tts, "_speed", speed)
+        if hasattr(self.tts, "set_arabic_voice"):
+            self.tts.set_arabic_voice(self.cfg["tts"].get("arabicVoice", ""))
+        if not hasattr(self.tts, "set_voice"):
+            self.tts.desc = f"Kokoro {self.tts._voice}"
+
+    def voice_list(self) -> list[str]:
+        if hasattr(self.tts, "voice_list"):
+            return self.tts.voice_list()
+        try:
+            return sorted(self.tts._kokoro.get_voices())
+        except Exception:  # noqa: BLE001
+            return [self.cfg["tts"].get("voice", "af_heart")]
+
+    # --------------------------------------------------------------- deck
+    def send_deck(self) -> None:
+        """Due count and streak for the header; section ranks for the index."""
+        if not self.deck:
+            return
+        rest = self.cfg["lesson"].get("restDays") or []
+        emit("deck", due=self.deck.due_count(), streak=self.deck.streak(rest))
+        plan = self.load_plan()
+        if plan and self.course:
+            emit("ranks", ranks=self.deck.ranks(
+                self.course, len(plan.get("sections", []))))
+
+    def card_lines(self, cards: list[dict]) -> str:
+        return "\n".join(
+            f"- id {c['id']}: {c['q']} (answer: {c.get('a') or '?'})"
+            + (f" [from the {c['course']} course]" if c["course"] != self.course
+               else "") for c in cards) or "- (no cards yet: ask about what " \
+                                           "we've covered so far)"
+
+    def grade(self, q: str, rating: str, a: str = "", cid: str = "") -> None:
+        if not (self.deck and self.course and q):
+            return
+        section = int(self.load_progress().get("section", 0) or 0)
+        self.deck.review(self.course, section, q, a, rating, cid=cid)
+        self.send_deck()
+
+    def flush_grade(self) -> None:
+        """A @result the tutor never followed with @card still counts."""
+        if self.pending_grade:
+            g, self.pending_grade = self.pending_grade, None
+            self.grade(g["q"], "good" if g["correct"] else "again")
+
+    # --------------------------------------------------------------- lull
+    def start_lull(self) -> None:
+        if self.lull:
+            self.lull.stop()
+            self.lull = None
+        lull = self.cfg.get("lull") or {}
+        if config.TEST or not lull.get("auto"):
+            return
+        from lull import LullMeter
+        call = self.loop.call_soon_threadsafe
+        self.lull = LullMeter(
+            config.COURSES / ".sidequest" / "break_screens.json",
+            lambda state, score: call(self.on_lull, state, score),
+            float(lull.get("fightAt", 0.6)), float(lull.get("calmAt", 0.3)))
+        log("lull meter on")
+
+    def on_lull(self, state: str, score: float) -> None:
+        log(f"lull: {state} (score {score})")
+        emit("lull", state=state)
+        if state == "fight" and not self.hush:
+            self.hush, self.hush_since = True, time.monotonic()
+        elif state != "fight" and self.hush:
+            self.hush = False
+            if (time.monotonic() - self.hush_since > 20 and self.last_pcm
+                    is not None and self.turn_active()):
+                # Back after a long fight: re-anchor with the last sentence.
+                self.player.start_clip(self.where_clip)
+                self.replay_last = True
+
+    async def wait_unhushed(self, turn: int) -> None:
+        """Lecture content waits while a fight is on or a replayed board is
+        showing. Answers to the learner never wait: they asked."""
+        while turn == self.turn and ((self.hush and self.turn_auto)
+                                     or self.rewound):
+            await asyncio.sleep(0.1)
+
+    # --------------------------------------------------------- warm start
+    def opening(self) -> str:
+        """The session opening: kickoff, course context, and due cards."""
+        text = f"{KICKOFF}\n{self.resume_brief()}"
+        cards = self.deck.due(6) if self.deck else []
+        if cards:
+            rest = self.cfg["lesson"].get("restDays") or []
+            text += "\n" + WARMUP.format(
+                n=len(cards), minutes=max(1, round(len(cards) * 0.4)),
+                streak=max(1, self.deck.streak(rest)),
+                cards=self.card_lines(cards))
+        return text
+
+    async def warm_start(self) -> None:
+        """Make the session opening in the background while nobody's talking,
+        so "let's start" plays at once instead of after ~8 s."""
+        if ((config.TEST and not os.environ.get("SIDEQUEST_TEST_WARM"))
+                or not self.cfg["lesson"].get("warmStart", True)
+                or not self.plan_exists()):
+            return
+        if not await self.ensure_tutor(quiet=True):
+            return
+        if self.turn_active() or self.user_talking or self.warm:
+            return
+        self.tutor_used = True
+        text = self.style_prefix() + self.opening()
+        buf = TurnBuffer()
+        self.warm = {"turn": self.turn, "buf": buf,
+                     "task": asyncio.create_task(
+                         self.produce(self.turn, buf, text))}
+        log("warm start: preparing the session opening in the background")
+
+    def drop_warm(self) -> None:
+        if self.warm:
+            if not self.warm["task"].done() and self.tutor:
+                asyncio.create_task(self.tutor.interrupt())
+            self.warm = None
+            self.warm_dropped = True
+
     # ----------------------------------------------------------- settings
     def save_user_config(self, patch: dict) -> None:
         """Merge a patch into config.json (keeping anything hand-edited)."""
@@ -367,37 +605,37 @@ class Engine:
             user = json.loads(path.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             user = {}
-        path.write_text(json.dumps(config._merge(user, patch), indent=2),
-                        encoding="utf-8")
+        if not config.TEST:     # self-tests never touch the real settings
+            path.write_text(json.dumps(config._merge(user, patch), indent=2),
+                            encoding="utf-8")
         self.cfg = config._merge(self.cfg, patch)
 
     def send_settings(self) -> None:
-        try:
-            voices = sorted(self.tts._kokoro.get_voices())
-        except Exception:  # noqa: BLE001
-            voices = [self.cfg["tts"].get("voice", "af_heart")]
-        emit("settings", voices=voices, cfg={
+        arabic = (self.tts.arabic_voice_list()
+                  if getattr(self.tts, "has_arabic", False) else [])
+        emit("settings", voices=self.voice_list(), arabicVoices=arabic, cfg={
             k: self.cfg.get(k) for k in ("keys", "brain", "lesson", "stt",
-                                         "tts", "audio", "mirror")})
+                                         "tts", "audio", "mirror", "lull")})
 
     async def apply_settings(self, patch: dict) -> None:
         from keys import vk
         for name in (patch.get("keys") or {}).values():
             try:
-                vk(name)
+                if name:
+                    vk(name)
             except ValueError as e:
                 emit("error", text=str(e))
                 return
         old = copy.deepcopy(self.cfg)
         self.save_user_config(patch)
-        if "tts" in patch and hasattr(self.tts, "_voice"):
-            self.tts._voice = self.cfg["tts"].get("voice", self.tts._voice)
-            self.tts._speed = float(self.cfg["tts"].get("speed", 1.0))
-            self.tts.desc = f"Kokoro {self.tts._voice}"
-            self.acks = await asyncio.to_thread(
-                lambda: [self.tts.synth(t) for t in ACKS])
-            self.nudge_clips = await asyncio.to_thread(
-                lambda: [self.tts.synth(t) for t in NUDGES])
+        if "tts" in patch:
+            self.set_voice(self.cfg["tts"].get("voice"),
+                           float(self.cfg["tts"].get("speed", 1.0)))
+            await self.make_clips()
+        if "lesson" in patch or "tts" in patch:
+            self.style_dirty = True
+        if "lull" in patch:
+            self.start_lull()
         if "endSilenceMs" in patch.get("audio", {}):
             from voice import FRAME_MS
             self.ears._end_frames = max(
@@ -420,7 +658,7 @@ class Engine:
             self.set_mode(bool(self.cfg["lesson"].get("autoContinue")),
                           announce=False)
         restart = (any(old["stt"].get(k) != self.cfg["stt"].get(k)
-                       for k in ("model", "device"))
+                       for k in ("model", "device", "language"))
                    or old.get("mirror") != self.cfg.get("mirror"))
         emit("toast", text="Settings saved" + (
             ". Restart the engine to apply speech-recognition changes."
@@ -477,6 +715,8 @@ class Engine:
             self.toggle_ears()
         elif action == "mode":
             self.set_mode(not self.cfg["lesson"].get("autoContinue"))
+        elif action == "busy":
+            self.set_busy(not self.busy)
         else:
             emit("key", name=action)
 
@@ -555,6 +795,8 @@ class Engine:
             self.hold_handle.cancel()
             self.hold_handle = None
         self.user_talking = True
+        if not self.pending_text:
+            self.speech_started_at = time.monotonic()
         self.cut_in = self.turn_active() if not self.pending_text else self.cut_in
         self.state_before_talk = self.state
         self.cancel_auto()
@@ -583,6 +825,10 @@ class Engine:
                                        self.whisper_hint())
         log(f"you said: {text!r} ({len(audio) / 16000:.1f}s) "
             f"[transcribed {self.since_spoke()} ms after you stopped]")
+        # Smart Turn hears an Arabic trail-off as finished more often than an
+        # English one, so while you speak Arabic, wait out the full pause.
+        self.ears.turn_confidence = (1.01 if getattr(self.stt, "lang", "en")
+                                     == "ar" else 0.7)
         if self.pending_text:
             text = f"{self.pending_text} {text}".strip()
             self.pending_text = ""
@@ -602,7 +848,41 @@ class Engine:
             else:
                 self.on_speech_cancel()
             return
+        if self.shadow and not (PAUSE.match(text) or RESUME.match(text)):
+            await self.score_shadow(audio, text)
+            return
         await self.handle_text(text)
+
+    async def score_shadow(self, audio, text: str) -> None:
+        """They repeated the phrase: score it (sound by sound when the
+        phoneme model is there, word by word otherwise) and let the tutor
+        coach from the result."""
+        target, self.shadow = self.shadow, None
+        emit("heard", text=text, turn=True)
+        self.player.start_clip(random.choice(self.acks))
+        try:
+            import pron
+            try:
+                res = await asyncio.to_thread(pron.score, audio,
+                                              target["text"], target["lang"])
+            except Exception as e:  # noqa: BLE001 — model missing or failed
+                log(f"pronunciation model unavailable ({e!r}); words only")
+                res = pron.score_words(text, target["text"])
+        except Exception as e:  # noqa: BLE001
+            log(f"pronunciation scoring failed: {e!r}")
+            self.start_turn(text)
+            return
+        emit("board", cmd={"op": "pron", "id": "pron", "lang": target["lang"],
+                           "score": res.get("score"),
+                           "words": res.get("words", [])})
+        off = [w["w"] for w in res.get("words", []) if not w.get("ok")]
+        sounds = sorted({s[0] for w in res.get("words", [])
+                         for s in w.get("sounds", []) if not s[1]})
+        self.start_turn(
+            f"[sidequest] Shadowing result for \"{target['text']}\": score "
+            f"{res.get('score')}/100. Heard: \"{res.get('heard') or text}\". "
+            f"Words off: {', '.join(off) or 'none'}. Sounds off: "
+            f"{' '.join(sounds) or 'none'}.")
 
     def flush_hold(self) -> None:
         self.hold_handle = None
@@ -639,6 +919,8 @@ class Engine:
             emit("heard", text=text)
             self.on_speech_cancel()  # the lesson carries on; only the mic stops
             self.set_ears(False)
+            return
+        if await self.local_command(text):
             return
         if PAUSE.match(text) and short(text):
             emit("heard", text=text)
@@ -677,9 +959,249 @@ class Engine:
         self.paused = False
         if START.match(text) and short(text, 6):
             text = KICKOFF   # "okay let's start" = the Start button
+        elif self.waiting_answer and self.asked_at:
+            text += self.answer_timing(text)
         self.start_turn(text)
         self.player.start_clip(random.choice(self.acks))
         self.measure = {"turn": self.turn, "ack": self.since_spoke()}
+
+    def answer_timing(self, text: str) -> str:
+        """How the answer came out, for the tutor's pacing (never said)."""
+        took = max(0.0, self.speech_started_at - self.asked_at)
+        n = fillers(text)
+        unclear = getattr(self.stt, "logprob", 0) < -0.8
+        return (f"\n[sidequest] answer timing: {took:.0f} s to start, {n} "
+                f"filler{'s' if n != 1 else ''}"
+                f"{', unclear audio' if unclear else ''}")
+
+    async def local_command(self, text: str) -> bool:
+        """Voice commands the app handles itself. True = handled; dial
+        changes like "harder" also go on to the tutor (False)."""
+        s = short(text, 7)
+
+        def heard() -> None:
+            emit("heard", text=text)
+            self.on_speech_cancel()
+
+        if MISSED_CMD.search(text):
+            emit("heard", text=text, turn=True)
+            self.catch_up()
+            return True
+        if not s:
+            return False
+        if BUSY_CMD.match(text):
+            heard()
+            self.set_busy(True)
+        elif FREE_CMD.match(text) and self.busy:
+            heard()
+            self.set_busy(False)
+        elif REWIND_CMD.match(text):
+            heard()
+            self.rewind(self.rewound + 1)
+        elif LIVE_CMD.match(text) and self.rewound:
+            heard()
+            self.rewind(0)
+        elif RAPID_CMD.match(text):
+            emit("heard", text=text, turn=True)
+            self.rapid_fire()
+        elif TEACHBACK_ON.match(text):
+            emit("heard", text=text, turn=True)
+            self.set_mode_flag("teachback", True)
+        elif TEACHBACK_OFF.match(text) and "teachback" in self.modes:
+            emit("heard", text=text, turn=True)
+            self.set_mode_flag("teachback", False)
+        elif SOCRATIC_ON.match(text):
+            emit("heard", text=text, turn=True)
+            self.set_mode_flag("socratic", True)
+        elif SOCRATIC_OFF.match(text) and "socratic" in self.modes:
+            emit("heard", text=text, turn=True)
+            self.set_mode_flag("socratic", False)
+        elif ROLEPLAY_CMD.match(text):
+            emit("heard", text=text, turn=True)
+            self.paused = False
+            self.start_turn(MODES["roleplay"])
+            self.player.start_clip(random.choice(self.acks))
+        elif COHOST_ON.match(text) or COHOST_OFF.match(text):
+            emit("heard", text=text, turn=True)
+            self.set_cohost(bool(COHOST_ON.match(text)))
+        elif SLOWER.match(text) or FASTER.match(text):
+            heard()
+            speed = float(self.cfg["tts"].get("speed", 1.0))
+            speed = round(min(1.5, max(0.7, speed + (0.1 if FASTER.match(text)
+                                                      else -0.1))), 2)
+            await self.apply_settings({"tts": {"speed": speed}})
+            emit("toast", text=f"Speaking speed {speed}")
+        elif OTHER_VOICE.match(text):
+            heard()
+            cur = self.cfg["tts"].get("voice", VOICE_CYCLE[0])
+            voices = [v for v in VOICE_CYCLE if v in self.voice_list()] \
+                or VOICE_CYCLE
+            nxt = voices[(voices.index(cur) + 1) % len(voices)] \
+                if cur in voices else voices[0]
+            await self.apply_settings({"tts": {"voice": nxt}})
+            emit("toast", text=f"Voice: {nxt}")
+            self.player.start_clip(random.choice(self.acks))
+        elif END_SESSION.match(text):
+            emit("heard", text=text, turn=True)
+            self.end_session()
+        elif BREAK_SCREEN.match(text):
+            heard()
+            self.mark_break()
+        elif EXPORT_ANKI.match(text):
+            heard()
+            await self.export_anki()
+        else:
+            # Difficulty and humour dials: remember them, and let the tutor
+            # hear the request too so it adjusts right away.
+            lesson = self.cfg["lesson"]
+            for pat, key, step in ((HARDER, "difficulty", 1),
+                                   (EASIER, "difficulty", -1),
+                                   (FUNNIER, "humor", 1),
+                                   (SERIOUS, "humor", -2)):
+                if pat.match(text):
+                    v = min(5, max(1, int(lesson.get(key, 3)) + step))
+                    self.save_user_config({"lesson": {key: v}})
+                    self.style_dirty = True
+                    emit("toast", text=f"{'Difficulty' if key == 'difficulty' else 'Humour'} {v}/5")
+                    break
+            return False
+        return True
+
+    # ------------------------------------------------------ lesson modes
+    def set_busy(self, on: bool) -> None:
+        """Fight mode: quick recall only while the game needs you."""
+        if on == self.busy:
+            return
+        self.busy = on
+        emit("busy", on=on)
+        emit("toast", text="Fight mode: quick questions only. Say \"I'm free\" "
+             f"or press {pretty(self.keys.get('busy', ''))} when you're back"
+             if on else "Back to the lesson")
+        self.paused = False
+        if on:
+            self.busy_since = time.monotonic()
+            cards = self.deck.due(5) if self.deck else []
+            cards = cards or (self.deck.recent(self.course or "", 5)
+                              if self.deck else [])
+            self.start_turn(MODES["busy"].format(cards=self.card_lines(cards)))
+        else:
+            self.start_turn(MODES["busy_off"])
+        self.player.start_clip(random.choice(self.acks))
+
+    def set_mode_flag(self, name: str, on: bool) -> None:
+        (self.modes.add if on else self.modes.discard)(name)
+        emit("modes", on=sorted(self.modes))
+        self.paused = False
+        self.start_turn(MODES[name if on else f"{name}_off"])
+        self.player.start_clip(random.choice(self.acks))
+
+    def set_cohost(self, on: bool) -> None:
+        self.save_user_config({"lesson": {"cohost": on}})
+        emit("toast", text="Co-host on" if on else "Co-host off")
+        self.paused = False
+        self.start_turn(MODES["cohost" if on else "cohost_off"])
+        self.player.start_clip(random.choice(self.acks))
+
+    def rapid_fire(self) -> None:
+        """A 60-second round of one-word answers. The end-of-sentence pause
+        gets shorter for it, since the answers are single words."""
+        cards = self.deck.due(5) if self.deck else []
+        if len(cards) < 5 and self.deck and self.course:
+            seen = {c["id"] for c in cards}
+            cards += [c for c in self.deck.recent(self.course, 10)
+                      if c["id"] not in seen][:5 - len(cards)]
+        self.paused = False
+        self.start_turn(MODES["rapid"].format(cards=self.card_lines(cards)))
+        self.player.start_clip(random.choice(self.acks))
+        from voice import FRAME_MS
+        normal = int(self.cfg["audio"].get("endSilenceMs", 1600))
+        self.ears._end_frames = max(8, min(normal, 800) // FRAME_MS)
+        if self.rapid_handle:
+            self.rapid_handle.cancel()
+
+        def restore() -> None:
+            self.rapid_handle = None
+            self.ears._end_frames = max(8, int(self.cfg["audio"].get(
+                "endSilenceMs", 1600)) // FRAME_MS)
+        self.rapid_handle = self.loop.call_later(90, restore)
+
+    def rewind(self, steps: int) -> None:
+        """Show an earlier board (missed in a fight). The lecture holds while
+        it's up, and comes back by itself after 20 s."""
+        steps = max(0, min(12, steps))
+        self.rewound = steps
+        emit("board", cmd={"op": "rewind", "steps": steps})
+        if self.rewind_handle:
+            self.rewind_handle.cancel()
+            self.rewind_handle = None
+        if steps:
+            self.rewind_handle = self.loop.call_later(20, self.rewind, 0)
+
+    def catch_up(self) -> None:
+        """"What did I miss?": the tutor recaps what it said while you were
+        busy (or the last few sentences)."""
+        since = max(self.busy_since, self.hush_since)
+        lines = [t for at, t in self.said_log if since and at >= since - 2]
+        lines = lines or [t for _, t in list(self.said_log)[-6:]]
+        self.paused = False
+        if self.rewound:
+            self.rewind(0)
+        self.start_turn(MISSED.format(lines="\n".join(f"- {t}" for t in lines)
+                                      or "- (nothing yet)"))
+        self.player.start_clip(random.choice(self.acks))
+
+    def mark_break(self) -> None:
+        if self.lull and self.lull.mark_break():
+            emit("toast", text="Got it: I'll treat this screen as a break")
+        else:
+            emit("toast", text="I can only learn a break screen while a "
+                 "full-screen game is in front")
+
+    async def export_anki(self) -> None:
+        if not self.deck:
+            return
+        folder = config.COURSES / ".sidequest" / "exports"
+        path = folder / f"sidequest-{self.course or 'all'}.apkg"
+        try:
+            n = await asyncio.to_thread(self.deck.export_anki, path,
+                                        self.course)
+        except Exception as e:  # noqa: BLE001
+            emit("error", text=f"Anki export failed: {e}")
+            return
+        emit("toast", text=f"Exported {n} cards for Anki")
+        emit("reveal", path=str(path))
+
+    def end_session(self) -> None:
+        """The session card (built here, no AI), then a short goodbye."""
+        self.flush_grade()
+        plan = self.load_plan() or {}
+        secs = plan.get("sections", [])
+        changes = []
+        if self.deck and self.course:
+            now = self.deck.ranks(self.course, len(secs))
+            for i, r in now.items():
+                before = self.session["ranks"].get(self.course, {}).get(
+                    i, {}).get("rank", "New")
+                if r["rank"] != before:
+                    changes.append({"title": secs[i - 1].get("title", ""),
+                                    "from": before, "to": r["rank"]})
+        cur = int(self.load_progress().get("section", 0) or 0)
+        nxt = secs[cur]["title"] if 0 <= cur < len(secs) else ""
+        import datetime as dt
+        tomorrow = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)
+        rest = self.cfg["lesson"].get("restDays") or []
+        emit("board", cmd={
+            "op": "sessioncard", "title": plan.get("title", self.course or ""),
+            "minutes": round((time.monotonic() - self.session["start"]) / 60),
+            "recalled": self.session["correct"],
+            "asked": self.session["asked"], "ranks": changes,
+            "due": self.deck.due_count(tomorrow) if self.deck else 0,
+            "streak": self.deck.streak(rest) if self.deck else 0,
+            "next": nxt})
+        self.paused = False
+        self.start_turn(SESSION_END)
+        self.paused = True       # no lecture after the goodbye
+        self.player.start_clip(random.choice(self.acks))
 
     # -------------------------------------------------------- new topics
     async def new_topic(self, topic: str, utterance: str) -> None:
@@ -790,12 +1312,23 @@ class Engine:
     async def on_command(self, msg: dict) -> None:
         cmd = msg.get("cmd")
         if cmd == "text" and msg.get("text", "").strip():
-            emit("heard", text=msg["text"].strip())
+            text = msg["text"].strip()
             self.paused = False
-            self.start_turn(msg["text"].strip())
+            import ingest
+            ids = ingest.youtube_ids(text)
+            if ids and self.course:
+                emit("heard", text=text)
+                await self.add_youtube(ids, text)
+            elif not await self.local_command(text):
+                emit("heard", text=text)
+                self.start_turn(text)
         elif cmd == "button":
             name = msg.get("name")
-            if name == "pause":
+            if name in ("rapid", "roleplay", "missed", "end", "break", "anki",
+                        "busy", "rewind", "live", "teachback", "socratic",
+                        "cohost"):
+                await self.on_mode_button(name)
+            elif name == "pause":
                 if self.paused:
                     self.paused = False
                     self.auto_chunks = 0
@@ -853,6 +1386,58 @@ class Engine:
         elif cmd == "add_files":
             self.add_files(msg.get("paths", []))
 
+    async def on_mode_button(self, name: str) -> None:
+        if name == "rapid":
+            self.rapid_fire()
+        elif name == "roleplay":
+            self.paused = False
+            self.start_turn(MODES["roleplay"])
+        elif name == "missed":
+            self.catch_up()
+        elif name == "end":
+            self.end_session()
+        elif name == "break":
+            self.mark_break()
+        elif name == "anki":
+            await self.export_anki()
+        elif name == "busy":
+            self.set_busy(not self.busy)
+        elif name == "rewind":
+            self.rewind(self.rewound + 1)
+        elif name == "live":
+            self.rewind(0)
+        elif name in ("teachback", "socratic"):
+            self.set_mode_flag(name, name not in self.modes)
+        elif name == "cohost":
+            self.set_cohost(not self.cfg["lesson"].get("cohost"))
+
+    async def add_youtube(self, ids: list[str], text: str) -> None:
+        """A pasted YouTube link: save its transcript as material and teach
+        it."""
+        import ingest
+        dest = config.COURSES / self.course / "materials"
+        dest.mkdir(parents=True, exist_ok=True)
+        emit("toast", text="Fetching the video's transcript...")
+        saved = []
+        for vid in ids[:3]:
+            try:
+                path = await asyncio.to_thread(ingest.youtube_transcript, vid,
+                                               dest)
+                saved.append(path.name)
+            except Exception as e:  # noqa: BLE001
+                log(f"youtube transcript {vid} failed: {e!r}")
+                emit("error", text=f"Couldn't get that video's transcript "
+                     f"(no captions, or YouTube blocked it): {str(e)[:80]}")
+        if not saved:
+            return
+        emit("toast", text=f"Added {', '.join(saved)} to {self.course}")
+        self.start_turn(
+            f"[sidequest] The learner shared a video; its transcript is in "
+            f"materials/{saved[0]}. They wrote: \"{text}\". Skim the "
+            f"transcript and teach it as they asked (or, if they didn't say, "
+            f"its key ideas, in order, with boards). Refer to moments by "
+            f"their timestamps when useful.")
+
     def add_files(self, paths: list[str]) -> None:
         if not self.course:
             emit("toast", text="Pick or create a course first")
@@ -865,6 +1450,13 @@ class Engine:
             if src.is_file():
                 shutil.copy2(src, dest / src.name)
                 added.append(src.name)
+                try:
+                    import ingest
+                    md = ingest.convert(dest / src.name)
+                    if md:
+                        added[-1] += f" (as {md.name})"
+                except Exception as e:  # noqa: BLE001
+                    log(f"couldn't convert {src.name}: {e!r}")
             elif src.is_dir():
                 shutil.copytree(src, dest / src.name, dirs_exist_ok=True)
                 added.append(src.name + "/")
@@ -896,6 +1488,11 @@ class Engine:
         emit("board", cmd={"op": "clear", "title": name})
         self.push_plan()
         self.send_outline()
+        plan = self.load_plan()
+        if self.deck and plan and name not in self.session["ranks"]:
+            # Ranks as they stood when this session met the course.
+            self.session["ranks"][name] = self.deck.ranks(
+                name, len(plan.get("sections", [])))
         asyncio.create_task(self.ensure_tutor(quiet=True))  # pre-connect
         if announce:
             emit("toast", text=f"Course: {name}. Press Start, or just say "
@@ -1097,10 +1694,36 @@ class Engine:
         if mtime != self.plan_mtime:
             self.plan_mtime = mtime
             emit("plan", plan=self.load_plan(), progress=self.load_progress())
+            self.send_deck()
 
     def track(self, cmd: dict) -> None:
-        """The app owns progress.json; the tutor reports through board ops."""
+        """The app owns progress.json and the deck; the tutor reports through
+        board ops."""
         op = cmd.get("op")
+        if op == "card":
+            g, self.pending_grade = self.pending_grade, None
+            rating = str(cmd.get("rating") or "").lower()
+            if rating not in ("again", "hard", "good", "easy"):
+                rating = "good" if (g or {}).get("correct", True) else "again"
+            self.grade(str(cmd.get("q") or (g or {}).get("q") or
+                           self.last_quiz), rating, str(cmd.get("a") or ""),
+                       str(cmd.get("id") or ""))
+            return
+        if op == "shadow":
+            text = str(cmd.get("text", "")).strip()
+            lang = str(cmd.get("lang") or ("ar" if re.search(
+                r"[؀-ۿ]", text) else "en"))
+            self.shadow = {"text": text, "lang": lang} if text else None
+            return
+        if op == "quiz":
+            self.flush_grade()
+            self.last_quiz = str(cmd.get("q", ""))
+            self.session["asked"] += 1
+        elif op == "result":
+            self.flush_grade()
+            self.pending_grade = {"q": self.last_quiz,
+                                  "correct": bool(cmd.get("correct"))}
+            self.session["correct"] += bool(cmd.get("correct"))
         if op not in ("section", "quiz", "result"):
             return
         p = self.load_progress()
@@ -1146,12 +1769,52 @@ class Engine:
             self.auto_handle = None
 
     def start_turn(self, text: str, auto: bool = False) -> None:
+        if self.rewound:
+            self.rewind(0)
+        warm = self.warm
+        if warm and text == KICKOFF and warm["turn"] == self.turn \
+                and not (self.turn_task and not self.turn_task.done()):
+            # The opening was made at launch: play it now, no waiting.
+            self.warm = None
+            self.cancel_auto()
+            self.turn_auto = False
+            self.auto_chunks = 0
+            log("warm start: playing the prepared opening")
+            self.turn_task = asyncio.create_task(
+                self.run_turn(self.turn, text, warm=warm))
+            return
+        self.drop_warm()
         self.interrupt()
         if not auto:
             self.auto_chunks = 0
+        self.turn_auto = auto
         self.turn_task = asyncio.create_task(self.run_turn(self.turn, text))
 
-    async def run_turn(self, turn: int, text: str) -> None:
+    def style_prefix(self) -> str:
+        """The style dials and language, sent once after any change."""
+        if not self.style_dirty:
+            return ""
+        self.style_dirty = False
+        lesson = self.cfg["lesson"]
+        persona = lesson.get("persona", "default")
+        lines = [f"[sidequest] style: difficulty {lesson.get('difficulty', 3)}"
+                 f"/5, humour {lesson.get('humor', 3)}/5, persona "
+                 f"{persona if persona in PERSONAS else 'default'}; co-host "
+                 f"{'on' if lesson.get('cohost') else 'off'}"]
+        lang = lesson.get("teachLanguage", "auto")
+        if lang in ("en", "ar"):
+            lines.append(f"[sidequest] language: "
+                         f"{'Arabic' if lang == 'ar' else 'English'}")
+        return "\n".join(lines) + "\n"
+
+    async def run_turn(self, turn: int, text: str,
+                       warm: dict | None = None) -> None:
+        if warm:
+            buf, producer = warm["buf"], warm["task"]
+            self.set_state("thinking")
+            self.last_voice_at = time.monotonic()
+            await self.play_turn(turn, buf, producer)
+            return
         if not await self.ensure_tutor() or turn != self.turn:
             return
         fresh = not self.tutor_used   # first message of this conversation
@@ -1167,8 +1830,9 @@ class Engine:
             text = KICKOFF
         if KICKOFF in text and self.plan_exists():
             # Everything "start" needs, inline: no reading plan, progress and
-            # notes first (that cost ~8 s before the first word).
-            text = text.replace(KICKOFF, f"{KICKOFF}\n{self.resume_brief()}")
+            # notes first (that cost ~8 s before the first word), plus the
+            # cards due for review.
+            text = text.replace(KICKOFF, self.opening())
         elif KICKOFF in text:
             if self.has_materials():
                 self.start_planner()
@@ -1195,12 +1859,25 @@ class Engine:
                         f"say now. If the rest still matters, come back to it "
                         f"afterwards.\n{text}")
             self.cut_off = ""
-        text += self.visual_nudges(text)
+        if self.warm_dropped:
+            self.warm_dropped = False
+            text = ("[sidequest] (The session opening you prepared earlier "
+                    "was never played; the learner said this first.)\n" + text)
+        if self.busy and text == CONTINUE:
+            cards = self.deck.due(3) if self.deck else []
+            text = MODES["busy"].format(cards=self.card_lines(cards))
+        elif self.modes and not text.startswith("[sidequest] Mode"):
+            text += f"\n[sidequest] (mode: {', '.join(sorted(self.modes))})"
+        text = self.style_prefix() + text + self.visual_nudges(text)
         self.set_state("thinking")
         self.last_voice_at = time.monotonic()
         asyncio.create_task(self.nudge(turn))
         buf = TurnBuffer()
         producer = asyncio.create_task(self.produce(turn, buf, text))
+        await self.play_turn(turn, buf, producer)
+
+    async def play_turn(self, turn: int, buf: "TurnBuffer",
+                        producer: asyncio.Task) -> None:
         # Lecture mode plays chunk after chunk. The next chunk is generated
         # (words, drawings, images, scenes) while the current one is still
         # playing, so it starts the instant this one ends: no gap, no
@@ -1222,13 +1899,17 @@ class Engine:
                 return
             emit("board", cmd={"op": "spot", "clear": True})   # undim
             self.history.append(dict(buf.flags))
+            self.flush_grade()
             self.push_plan()
             if (not self.plan_exists() and self.has_materials()
                     and not self.planning):
                 self.start_planner()   # the tutor just wrote topic.md
             self.waiting_answer = buf.asked
+            if buf.asked:
+                self.asked_at = time.monotonic()
             if nxt and self.lecturing() and not self.user_talking:
                 self.auto_chunks += 1
+                self.turn_auto = True
                 buf, producer = nxt
                 continue
             if nxt:
@@ -1245,6 +1926,7 @@ class Engine:
         lesson = self.cfg["lesson"]
         cap = int(lesson.get("maxAutoChunks", 0) or 0)
         return (bool(lesson.get("autoContinue")) and not self.paused
+                and not self.busy
                 and not self.planning and not self.plan_pending
                 and bool(self.tutor) and not (cap and self.auto_chunks >= cap))
 
@@ -1258,9 +1940,13 @@ class Engine:
             async for kind, value in self.tutor.reply(text):
                 if turn != self.turn:
                     continue
-                if kind == "say":
-                    fut = self.loop.run_in_executor(self.tts_pool,
-                                                    self.tts.synth, value)
+                if kind.startswith("say"):
+                    speaker = kind[4:]      # "" tutor, "B" co-host, "C" character
+                    if speaker == "B" and not self.cfg["lesson"].get("cohost"):
+                        speaker = ""
+                    fut = self.loop.run_in_executor(self.tts_pool, self.synth,
+                                                    value, speaker)
+                    fut.speaker = speaker
                     self.pending_tts.append(fut)
                     queue.put(("say", value, fut))
                 elif kind == "board":
@@ -1499,6 +2185,17 @@ class Engine:
                     return
             if pos >= len(queue.items) or turn != self.turn:
                 return
+            await self.wait_unhushed(turn)
+            if turn != self.turn:
+                return
+            if self.replay_last:
+                # Back from a long fight: "So, where was I." and the last
+                # sentence again, before going on.
+                self.replay_last = False
+                await self.wait_player()
+                if self.last_pcm is not None:
+                    self.player.start_clip(self.last_pcm)
+                    await self.wait_player()
             item = queue.items[pos]
             pos += 1
             kind, value, fut = item
@@ -1535,7 +2232,8 @@ class Engine:
                 if tid:
                     follow["drawn"] = tid
             if kind == "board":
-                emit("board", cmd=value)
+                if value.get("op") not in APP_OPS:
+                    emit("board", cmd=value)
                 self.track(value)
                 if value.get("op") == "section":
                     self.push_plan()
@@ -1590,7 +2288,9 @@ class Engine:
                     self.set_state("speaking")
                 self.turn_spoke = True
                 self.last_said = value
-                emit("say", text=value)
+                self.said_log.append((time.monotonic(), value))
+                self.last_pcm = pcm
+                emit("say", text=value, speaker=getattr(fut, "speaker", ""))
                 self.ears.tutor_speaking = True
                 self.player.start_clip(pcm)
                 await self.wait_player()
@@ -1613,6 +2313,9 @@ class Engine:
 
         def go() -> None:
             self.auto_handle = None
+            if self.hush or self.rewound:
+                self.schedule_auto()     # a fight or a replay: ask again later
+                return
             if self.state == "idle" and not self.paused \
                     and not self.user_talking:
                 self.auto_chunks += 1

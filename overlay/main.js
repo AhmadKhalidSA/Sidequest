@@ -51,7 +51,7 @@ function broadcast(ev) {
   if (ev.ev === 'board') {
     if (ev.cmd && ev.cmd.op === 'clear') boardLog = [];
     boardLog.push(ev);
-  } else if (['ready', 'status', 'courses', 'plan', 'progress'].includes(ev.ev)) {
+  } else if (['ready', 'status', 'courses', 'plan', 'progress', 'deck', 'ranks', 'busy', 'modes'].includes(ev.ev)) {
     latest[ev.ev] = ev;
   }
   if (win && !win.isDestroyed()) win.webContents.send('engine', ev);
@@ -60,7 +60,7 @@ function broadcast(ev) {
 }
 
 function replayTo(send) {
-  for (const key of ['ready', 'courses', 'plan', 'progress', 'status']) if (latest[key]) send(latest[key]);
+  for (const key of ['ready', 'courses', 'plan', 'progress', 'deck', 'ranks', 'busy', 'modes', 'status']) if (latest[key]) send(latest[key]);
   for (const ev of boardLog) send(ev);
 }
 
@@ -112,6 +112,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'index.html'));
   win.webContents.on('did-finish-load', applyZoom);
   if (CAPTURE_DIR) {
+    win.webContents.setAudioMuted(true);   // tests never make a sound
     // SIDEQUEST_EVAL="ms:js" runs page JS at that time (e.g. open the index).
     const [at, ...code] = (process.env.SIDEQUEST_EVAL || '').split(':');
     if (code.length) setTimeout(() => win.webContents.executeJavaScript(code.join(':')), Number(at));
@@ -249,6 +250,11 @@ function startEngine() {
       else if (ev.name === 'full' && !state.big) toggleBig();
       return;
     }
+    if (ev.ev === 'reveal') {
+      // An export the learner asked for (e.g. the Anki deck): show it.
+      if (ev.path && !CAPTURE_DIR) shell.showItemInFolder(ev.path);
+      return;
+    }
     if (ev.ev === 'capture') {
       // Hide the panel while the engine screenshots the screen behind it.
       if (ev.on) win.hide();
@@ -322,10 +328,16 @@ function startMirror() {
     ['/node_modules/roughjs/bundled/', path.join(ROOT, 'node_modules', 'roughjs', 'bundled')],
     ['/node_modules/gsap/dist/', path.join(ROOT, 'node_modules', 'gsap', 'dist')],
     ['/node_modules/mermaid/dist/', path.join(ROOT, 'node_modules', 'mermaid', 'dist')],
+    // Library-backed board ops (board_libs.js): simulations, graphs, maps,
+    // sheet music, molecules, code stepping.
+    ...['matter-js/build', 'jsxgraph/distrib', 'd3-array/dist', 'd3-geo/dist', 'topojson-client/dist',
+      'world-atlas', 'abcjs/dist', 'smiles-drawer/dist', 'pyodide']
+      .map((d) => [`/node_modules/${d}/`, path.join(ROOT, 'node_modules', ...d.split('/'))]),
     ['/cache/', path.join(ROOT, 'cache')],
   ];
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf',
-    '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp' };
+  const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp',
+    '.json': 'application/json', '.wasm': 'application/wasm', '.zip': 'application/zip' };
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     if (url.pathname === '/') { res.writeHead(302, { Location: '/overlay/index.html?mirror=1' }); return res.end(); }
