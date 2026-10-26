@@ -1,0 +1,11 @@
+# dependencies and downloads
+node_modules/
+.venv/
+models/
+__pycache__/
+
+# personal, per-machine data: never commit
+config.json
+courses/
+logs/
+cache/

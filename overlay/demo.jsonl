@@ -1,0 +1,47 @@
+{"ev":"ready","keys":{"mute":"Mouse 5","interact":"F8","hide":"F9"},"stt":"demo","tts":"demo","model":"demo"}
+{"ev":"courses","list":["sample-networking"],"current":"sample-networking"}
+{"ev":"plan","plan":{"title":"IPv4 Addressing Basics","sections":[{"title":"What an IPv4 address is","goal":"Read a dotted address and its bits","steps":["Four octets","Binary view","0 to 255"]},{"title":"Network and host parts","goal":"Split network vs host with a mask","steps":["Masks","CIDR","Usable hosts"]},{"title":"Private ranges","goal":"Spot private and special ranges","steps":["RFC 1918","NAT","APIPA clue"]},{"title":"Security relevance","goal":"Use it in scanning and firewall rules","steps":["Subnet scans","Firewall CIDRs","Spoofing"]}],"bigPicture":"Addresses identify hosts, masks split them into networks, and that structure is what scanners and firewalls work with."},"progress":{"section":1,"done":[],"asked":2,"correct":1}}
+{"ev":"status","state":"speaking"}
+{"ev":"board","cmd":{"op":"section","index":1}}
+{"ev":"board","cmd":{"op":"clear","title":"What is an IPv4 address?"}}
+{"ev":"say","text":"An IPv4 address is just four numbers separated by dots."}
+{"_delay":900,"ev":"board","cmd":{"op":"row","id":"o","items":["192","168","1","10"],"y":110,"h":90,"color":"blue"}}
+{"_delay":1800,"ev":"say","text":"Each of those four numbers is called an octet, which is exactly eight bits."}
+{"_delay":600,"ev":"board","cmd":{"op":"text","id":"bits","x":146,"y":260,"text":"11000000","size":30,"color":"amber","align":"center"}}
+{"_delay":200,"ev":"board","cmd":{"op":"arrow","from":"o1","to":"bits","label":"8 bits"}}
+{"_delay":1800,"ev":"say","text":"Eight bits can only count from zero to two fifty-five."}
+{"_delay":500,"ev":"board","cmd":{"op":"math","id":"m","x":500,"y":380,"tex":"2^8 = 256 \\Rightarrow 0 \\ldots 255","size":40,"align":"center"}}
+{"_delay":1500,"ev":"board","cmd":{"op":"highlight","target":"o1","color":"red"}}
+{"_delay":1200,"ev":"board","cmd":{"op":"quiz","q":"Is 192.168.300.1 a valid IPv4 address?","choices":["Yes","No, 300 > 255"]}}
+{"_delay":0,"ev":"status","state":"idle","detail":"Your answer?"}
+{"_delay":2600,"ev":"heard","text":"no because three hundred is bigger than two fifty five"}
+{"_delay":700,"ev":"board","cmd":{"op":"result","correct":true,"note":"Right: an octet tops out at 255."}}
+{"_delay":0,"ev":"progress","progress":{"section":1,"done":[],"asked":3,"correct":2}}
+{"_delay":2600,"ev":"status","state":"speaking"}
+{"_delay":0,"ev":"board","cmd":{"op":"clear","title":"TCP three-way handshake"}}
+{"_delay":300,"ev":"say","text":"Before any data flows, TCP does a three-way handshake."}
+{"_delay":300,"ev":"board","cmd":{"op":"seq","id":"tcp","actors":["Client","Server"]}}
+{"_delay":1500,"ev":"board","cmd":{"op":"msg","seq":"tcp","from":"Client","to":"Server","label":"SYN"}}
+{"_delay":1100,"ev":"board","cmd":{"op":"msg","seq":"tcp","from":"Server","to":"Client","label":"SYN-ACK","color":"green"}}
+{"_delay":1100,"ev":"board","cmd":{"op":"msg","seq":"tcp","from":"Client","to":"Server","label":"ACK"}}
+{"_delay":900,"ev":"say","text":"A SYN scan sends only the first packet and never finishes the handshake."}
+{"_delay":600,"ev":"board","cmd":{"op":"code","id":"k","x":300,"y":420,"text":"nmap -sS 10.0.0.0/24","size":24}}
+{"_delay":3200,"ev":"board","cmd":{"op":"clear","title":"Derivatives"}}
+{"_delay":200,"ev":"say","text":"The derivative of x squared is two x: the slope at every point."}
+{"_delay":300,"ev":"board","cmd":{"op":"plot","id":"p","x":470,"y":60,"w":420,"h":330,"fn":["x^2","2x"],"xmin":-3,"xmax":3,"ymin":-6,"ymax":9}}
+{"_delay":900,"ev":"board","cmd":{"op":"math","id":"d","x":40,"y":120,"tex":"\\frac{d}{dx}\\,x^2 = 2x","size":40}}
+{"_delay":700,"ev":"board","cmd":{"op":"table","id":"t","x":40,"y":260,"rows":[["x","slope 2x"],["-1","-2"],["0","0"],["2","4"]],"size":24}}
+{"_delay":2500,"ev":"heard","text":"wait, how does Wireshark fit into this?","turn":true}
+{"_delay":1300,"ev":"board","cmd":{"op":"clear","title":"Wireshark"}}
+{"_delay":200,"ev":"say","text":"Wireshark is a packet microscope."}
+{"_delay":300,"ev":"board","cmd":{"op":"bullets","id":"w","items":["Captures every packet on an interface"],"y":100}}
+{"_delay":1500,"ev":"board","cmd":{"op":"bullet","list":"w","text":"Capture filter: what gets recorded"}}
+{"_delay":1300,"ev":"board","cmd":{"op":"bullet","list":"w","text":"Display filter: what you look at"}}
+{"_delay":1000,"ev":"board","cmd":{"op":"code","id":"f","x":50,"y":330,"text":"tcp.flags.syn == 1 && tcp.flags.ack == 0","size":24}}
+{"_delay":3000,"ev":"board","cmd":{"op":"clear","title":"TCP vs UDP"}}
+{"_delay":300,"ev":"board","cmd":{"op":"compare","id":"c","left":"TCP","right":"UDP","rows":[["Reliable, ordered","Best effort"],["3-way handshake","No handshake"],["Web, SSH, email","DNS, VoIP, games"]],"y":110}}
+{"_delay":3200,"ev":"board","cmd":{"op":"clear","title":"TCP header"}}
+{"_delay":300,"ev":"board","cmd":{"op":"packet","id":"p","fields":[["Source port",16],["Destination port",16],["Sequence number",32],["Acknowledgment number",32],["Offset",4],["Rsvd",3],["Flags",9],["Window",16]],"y":100}}
+{"_delay":1800,"ev":"board","cmd":{"op":"highlight","target":"p7","color":"red"}}
+{"_delay":1500,"ev":"board","cmd":{"op":"clear","title":"Packet path"}}
+{"_delay":300,"ev":"board","cmd":{"op":"flow","id":"f","items":["Browser","DNS","Web server"],"labels":["where is it?","HTTPS"],"y":200}}

@@ -1,0 +1,20 @@
+{
+  "name": "sidequest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Study overlay: an AI tutor that talks and draws on top of your game.",
+  "main": "overlay/main.js",
+  "scripts": {
+    "start": "set ELECTRON_RUN_AS_NODE=&& electron .",
+    "demo": "set ELECTRON_RUN_AS_NODE=&& electron . --demo"
+  },
+  "dependencies": {
+    "gsap": "^3.15.0",
+    "katex": "^0.19.1",
+    "mermaid": "^12.2.0",
+    "roughjs": "^4.6.6"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0"
+  }
+}

@@ -1,0 +1,20 @@
+# Sidequest engine (Python 3.11+, Windows). Installed by setup.ps1.
+claude-agent-sdk==0.2.110      # Claude via your Claude Code login
+faster-whisper==1.1.1          # local speech-to-text
+kokoro-onnx==0.5.0             # local voice
+onnxruntime==1.20.1
+numpy==2.2.6
+sounddevice==0.5.5
+pysilero-vad==2.1.0            # voice activity detection
+transformers==5.2.0            # Smart Turn's feature extractor
+huggingface_hub==1.22.0
+json-repair==0.64.2
+mss==9.0.2                     # "look at my screen"
+pillow==12.3.0
+pywin32==312
+comtypes==1.4.16               # follow the Windows default audio device
+
+# Optional: run speech recognition on an NVIDIA GPU (~0.3 s instead of ~1-2 s).
+# setup.ps1 installs these when it finds an NVIDIA card.
+# nvidia-cublas-cu12==12.9.2.10
+# nvidia-cudnn-cu12==9.24.0.43

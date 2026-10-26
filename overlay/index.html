@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sidequest</title>
+  <link rel="stylesheet" href="../node_modules/katex/dist/katex.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="panel">
+    <header id="hdr">
+      <span id="dot" class="dot" title="Status"></span>
+      <span id="status">Starting...</span>
+      <span id="meter"><i></i></span>
+      <span class="grow"></span>
+      <span id="planning" hidden>Planning...</span>
+      <span id="section" title="Lesson progress"></span>
+      <span id="score" title="Checkpoint questions right / asked"></span>
+      <button id="modeBtn" class="hot hbtn" title="Lecture: keeps teaching while you're quiet. Wait: answers, then waits for you.">Lecture</button>
+      <button id="indexBtn" class="hot hbtn" title="Course index: every section, what's done, what's next">Index</button>
+      <button id="micBtn" class="hot hbtn on" title="Mic on/off (Mouse 5). The lesson keeps going either way.">Mic on</button>
+      <button id="screenBtn" class="hot hbtn" title="Look at my screen: screenshot what you're seeing and ask about it">Screen</button>
+      <button id="dockBtn" class="hot hbtn" title="Dock: snap back to its corner (or say &quot;dock it&quot;)">Dock</button>
+      <button id="bigBtn" class="hot hbtn icon" title="Full screen (F10, or say &quot;full screen&quot;)">&#x2922;</button>
+      <button id="gearBtn" class="hot hbtn icon" title="Settings">&#x2699;</button>
+    </header>
+    <div id="pbar"><i></i></div>
+
+    <div id="stage">
+      <div id="board">
+        <svg viewBox="0 0 1000 600" width="1000" height="600"></svg>
+        <div class="html"></div>
+      </div>
+      <div id="boardTitle"></div>
+
+      <div id="quiz" hidden>
+        <div class="q-head">Checkpoint <span class="q-hint">answer out loud</span></div>
+        <div id="qText"></div>
+        <div id="qChoices"></div>
+        <div id="qNote"></div>
+      </div>
+
+      <div id="index" class="hot" hidden>
+        <div class="ix-head"><b id="ixTitle">Course index</b><span class="grow"></span><button id="ixClose" title="Close">&times;</button></div>
+        <div id="ixBig"></div>
+        <ol id="ixList"></ol>
+        <div class="ix-foot">
+          <span class="ix-hint">Click a section to jump there.</span>
+          <span class="grow"></span>
+          <button id="ixOutline" title="Paste the headers / table of contents of your course">Course outline</button>
+          <button id="ixReplan" title="Have the planner rethink the whole course">Re-plan</button>
+        </div>
+      </div>
+
+      <div id="outlineBox" hidden>
+        <div class="ob-head">Course outline</div>
+        <div class="ob-hint">Paste or type the headers / table of contents from your course, one per line. Topic names are enough; no slides needed. The planner thinks about the big picture and builds the course from it.</div>
+        <textarea id="outlineText" placeholder="Module 1: Network fundamentals&#10;  - OSI model&#10;  - TCP vs UDP&#10;Module 2: Packet analysis&#10;  - Wireshark basics"></textarea>
+        <div class="row"><button id="outlineSave" class="primary">Save &amp; plan the course</button><button id="outlineCancel">Cancel</button></div>
+      </div>
+
+      <!-- Controls: shown in interact mode (F8) -->
+      <div id="drawer" hidden>
+        <div class="row">
+          <label>Course</label>
+          <select id="course"></select>
+          <button id="newCourseBtn" title="Create a new course folder">+ New</button>
+          <span id="newCourse" hidden>
+            <input id="newCourseName" placeholder="e.g. cybersecurity" maxlength="60">
+            <button id="newCourseOk" class="primary">Create</button>
+          </span>
+        </div>
+        <div class="row buttons">
+          <button data-btn="start" class="primary" title="Build the plan on first run, or resume where you left off">Start / Resume</button>
+          <button data-btn="quiz" title="Ask me a checkpoint question now">Quiz me</button>
+          <button data-btn="repeat" title="Explain the last idea again, differently">Repeat</button>
+          <button data-btn="recap" title="Short recap of everything so far">Recap</button>
+          <button data-btn="next" title="Move on to the next section">Next section</button>
+          <button data-btn="pause" title="Pause or resume the lesson">Pause</button>
+          <button data-btn="screen" title="Screenshot what you're looking at and ask about it (or say: look at my screen)">Look at my screen</button>
+          <button id="drawerIndex" title="See every section">Index</button>
+          <button id="drawerOutline" title="Paste your course headers">Course outline</button>
+        </div>
+        <div class="row">
+          <input id="ask" placeholder="Type a question and press Enter" autocomplete="off">
+          <button id="muteBtn" title="Stop the tutor hearing you (e.g. for team voice chat)">Mute mic</button>
+        </div>
+        <div class="row small">
+          <label>Opacity</label>
+          <input id="opacity" type="range" min="0.35" max="1" step="0.01">
+          <label>Size</label>
+          <span class="seg" id="sizeSeg"><button data-size="S">S</button><button data-size="M">M</button><button data-size="L">L</button><button data-size="XL">XL</button></span>
+          <label>Corner</label>
+          <span class="seg" id="cornerSeg"><button data-corner="tl" title="Top left">&#9700;</button><button data-corner="tr" title="Top right">&#9701;</button><button data-corner="bl" title="Bottom left">&#9699;</button><button data-corner="br" title="Bottom right">&#9698;</button></span>
+          <span class="grow"></span>
+          <button id="hideBtn" title="Hide the panel (F9 brings it back)">Hide</button>
+          <button id="quitBtn" class="danger">Quit</button>
+        </div>
+        <div class="hint" id="drawerHint"></div>
+      </div>
+      <div id="dropzone" hidden>Drop to add to this course</div>
+    </div>
+
+    <div id="sub">
+      <div id="heard"></div>
+      <div id="caption"></div>
+    </div>
+
+    <div id="settings" hidden>
+      <div class="st-head"><b>Settings</b><span class="grow"></span><button id="stClose" title="Close (Esc)">&times;</button></div>
+      <div id="stBody"></div>
+      <div class="st-foot">
+        <span id="stNote"></span><span class="grow"></span>
+        <button id="stRestart" title="Restart the voice engine (needed after speech-recognition changes)">Restart engine</button>
+        <button id="stSave" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../node_modules/katex/dist/katex.min.js"></script>
+  <script src="../node_modules/roughjs/bundled/rough.js"></script>
+  <script src="../node_modules/gsap/dist/gsap.min.js"></script>
+  <script src="../node_modules/gsap/dist/MotionPathPlugin.min.js"></script>
+  <script src="../node_modules/mermaid/dist/mermaid.min.js"></script>
+  <script src="board.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

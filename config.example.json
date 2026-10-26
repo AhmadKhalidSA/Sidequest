@@ -1,0 +1,44 @@
+{
+  "keys": {
+    "mute": "MOUSE5",
+    "interact": "F8",
+    "hide": "F9",
+    "big": "F10",
+    "mode": "F7"
+  },
+  "brain": {
+    "model": "sonnet",
+    "thinking": false,
+    "plannerModel": "opus",
+    "directorModel": "sonnet"
+  },
+  "lesson": {
+    "autoContinue": true,
+    "autoContinueSeconds": 3,
+    "maxAutoChunks": 0,
+    "prebufferSeconds": 8,
+    "prebufferVisuals": 3,
+    "visualWaitSeconds": 6,
+    "followAlong": true
+  },
+  "stt": {
+    "model": "distil-large-v3",
+    "device": "auto",
+    "language": "en"
+  },
+  "tts": {
+    "voice": "af_heart",
+    "speed": 1.0
+  },
+  "audio": {
+    "inputDevice": null,
+    "outputDevice": null,
+    "endSilenceMs": 1600,
+    "smartTurn": true
+  },
+  "mirror": {
+    "enabled": false,
+    "port": 5199,
+    "allowControl": false
+  }
+}
