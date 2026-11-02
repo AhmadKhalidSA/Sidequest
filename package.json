@@ -9,6 +9,7 @@
     "demo": "set ELECTRON_RUN_AS_NODE=&& electron . --demo"
   },
   "dependencies": {
+    "@fontsource/baloo-bhaijaan-2": "^5.3.0",
     "abcjs": "^6.7.2",
     "d3-geo": "^3.1.1",
     "gsap": "^3.15.0",

@@ -18,8 +18,8 @@
     "autoContinue": true,
     "autoContinueSeconds": 3,
     "maxAutoChunks": 0,
-    "prebufferSeconds": 8,
-    "prebufferVisuals": 3,
+    "prebufferSeconds": 4,
+    "prebufferVisuals": 1,
     "visualWaitSeconds": 6,
     "followAlong": true,
     "warmStart": true,
@@ -28,7 +28,9 @@
     "difficulty": 3,
     "humor": 3,
     "teachLanguage": "auto",
-    "restDays": []
+    "restDays": [],
+    "kidsMode": false,
+    "kidName": ""
   },
   "lull": {
     "auto": true,
@@ -43,7 +45,7 @@
       "en",
       "ar"
     ],
-    "multilingualModel": "large-v3-turbo"
+    "multilingualModel": "parseh/whisper-ar-dialectal-ct2"
   },
   "tts": {
     "engine": "kokoro",
@@ -51,6 +53,9 @@
     "speed": 1.0,
     "voice2": "bf_emma",
     "voice3": "am_michael",
+    "arabicEngine": "saudi",
+    "saudiDir": "",
+    "arabicExpressive": 0.5,
     "arabic": true,
     "arabicVoice": "",
     "arabicDir": "",

@@ -120,7 +120,7 @@ function createWindow() {
     setInterval(async () => {
       const img = await win.webContents.capturePage();
       fs.writeFileSync(path.join(CAPTURE_DIR, `cap${String(n++).padStart(2, '0')}.png`), img.toPNG());
-    }, 3000);
+    }, Number(process.env.SIDEQUEST_CAPTURE_MS) || 3000);   // dev: finer steps for checking motion
     return;
   }
   win.once('ready-to-show', () => { if (!state.hidden) win.showInactive(); });
@@ -307,6 +307,24 @@ async function snapshotBoard() {
   } catch (e) { console.warn('board snapshot failed', e); }
 }
 
+// config.json "watch": true saves a picture of the panel every 3 s into
+// logs/watch (last 400), for reviewing a real session's boards afterwards.
+function startWatch() {
+  if (!cfg.watch || CAPTURE_DIR) return;
+  const dir = path.join(LOGS, 'watch');
+  fs.mkdirSync(dir, { recursive: true });
+  setInterval(async () => {
+    if (!win || win.isDestroyed() || !win.isVisible()) return;
+    try {
+      const img = await win.webContents.capturePage();
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      fs.writeFileSync(path.join(dir, `${stamp}.png`), img.toPNG());
+      const files = fs.readdirSync(dir).filter((f) => f.endsWith('.png')).sort();
+      for (const f of files.slice(0, Math.max(0, files.length - 400))) fs.unlinkSync(path.join(dir, f));
+    } catch {}
+  }, 3000);
+}
+
 function stopEngine() {
   if (!engine) return;
   const pid = engine.pid;
@@ -331,7 +349,7 @@ function startMirror() {
     // Library-backed board ops (board_libs.js): simulations, graphs, maps,
     // sheet music, molecules, code stepping.
     ...['matter-js/build', 'jsxgraph/distrib', 'd3-array/dist', 'd3-geo/dist', 'topojson-client/dist',
-      'world-atlas', 'abcjs/dist', 'smiles-drawer/dist', 'pyodide']
+      'world-atlas', 'abcjs/dist', 'smiles-drawer/dist', 'pyodide', '@fontsource/baloo-bhaijaan-2']
       .map((d) => [`/node_modules/${d}/`, path.join(ROOT, 'node_modules', ...d.split('/'))]),
     ['/cache/', path.join(ROOT, 'cache')],
   ];
@@ -433,6 +451,7 @@ if (!CAPTURE_DIR && !app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     createWindow();
     if (!CAPTURE_DIR) createTray();
+    startWatch();
     startMirror();
     if (process.argv.includes('--demo')) replay(process.env.SIDEQUEST_DEMO || path.join(__dirname, 'demo.jsonl'));
     else startEngine();

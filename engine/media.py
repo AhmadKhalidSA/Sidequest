@@ -203,3 +203,144 @@ def find_icon(name: str, color: str = "#EEF1F7") -> dict | None:
     except Exception as e:  # noqa: BLE001
         log(f"icon lookup failed for {name!r}: {e}")
         return None
+
+
+# ------------------------------------------------------------- kids stickers
+# Kids-mode ops (sticker, stickers, pick, story, frame) name their pictures by
+# emoji character. The board can draw the character itself (Windows' own
+# emoji font, no network); when the engine resolves it here first, the
+# picture becomes Microsoft's Fluent Emoji in colour (MIT licence), fetched
+# once from Iconify and cached under cache/stickers.
+STICKER_SET = "fluent-emoji"
+STICKER_DIR = CACHE / "stickers"
+_sticker_names: list[str] | None = None
+# Emoji whose Unicode name is far from their everyday (CLDR) name.
+STICKER_ALIASES = {"❤": "red-heart", "😀": "grinning-face",
+                   "😃": "grinning-face-with-big-eyes",
+                   "😄": "grinning-face-with-smiling-eyes",
+                   "🌟": "glowing-star", "⭐": "star"}
+KIDS_MEDIA_OPS = {"sticker", "stickers", "pick", "story", "frame"}
+
+
+def _sticker_index() -> list[str]:
+    """Every icon name in the set (kebab-case CLDR names: "red-apple"),
+    fetched once and kept on disk."""
+    global _sticker_names
+    if _sticker_names is not None:
+        return _sticker_names
+    path = STICKER_DIR / f"{STICKER_SET}-names.json"
+    try:
+        _sticker_names = json.loads(path.read_text("utf-8"))
+        return _sticker_names
+    except (OSError, ValueError):
+        pass
+    data, _ = _get(f"https://api.iconify.design/collection?prefix={STICKER_SET}")
+    info = json.loads(data)
+    names = list(info.get("uncategorized", []))
+    for group in (info.get("categories") or {}).values():
+        names.extend(group)
+    names.extend((info.get("aliases") or {}).keys())
+    _sticker_names = sorted(set(names))
+    STICKER_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_sticker_names), "utf-8")
+    return _sticker_names
+
+
+def _emoji_words(emoji: str) -> list[str]:
+    """Unicode names of the emoji's characters as words ("LION FACE" ->
+    ["lion", "face"]), skipping joiners, variation selectors and skin tones."""
+    import unicodedata
+    words: list[str] = []
+    for ch in emoji:
+        cp = ord(ch)
+        if cp in (0x200D, 0xFE0F, 0xFE0E) or 0x1F3FB <= cp <= 0x1F3FF:
+            continue
+        name = unicodedata.name(ch, "")
+        words += [w for w in re.split(r"[\s-]+", name.lower()) if w]
+    return words
+
+
+def sticker_name(emoji: str = "", name: str = "") -> str | None:
+    """Best icon in the set for an emoji character or an English name."""
+    names = _sticker_index()
+    have = set(names)
+    base = emoji.replace("️", "")
+    if not name and base in STICKER_ALIASES:
+        return STICKER_ALIASES[base]
+    words = [w for w in re.split(r"[\s_-]+", name.lower()) if w] or _emoji_words(emoji)
+    if not words:
+        return None
+    noise = {"face", "with", "symbol", "sign", "black", "white", "medium",
+             "small", "large", "emoji", "of"}
+    tries = ["-".join(words), "-".join(w for w in words if w not in noise),
+             words[-1], words[0]]
+    for t in tries:
+        if t and t in have:
+            return t
+    # Closest by shared words ("earth globe europe-africa" ->
+    # "globe-showing-europe-africa"), shorter names first on a tie.
+    want = set(words) - noise or set(words)
+    best, score = None, 0.0
+    for n in names:
+        parts = set(n.split("-"))
+        hit = len(want & parts)
+        if not hit:
+            continue
+        s = hit / len(want | parts)
+        if s > score or (s == score and best and len(n) < len(best)):
+            best, score = n, s
+    return best if score >= 0.34 else None
+
+
+def find_sticker(emoji: str = "", name: str = "") -> dict | None:
+    """A colour Fluent Emoji picture for an emoji (or English name) ->
+    {"src"} or None (the board then draws the emoji character itself)."""
+    try:
+        icon = sticker_name(emoji, name)
+        if not icon:
+            return None
+        path = STICKER_DIR / f"{icon}.svg"
+        if not path.exists():
+            svg, _ = _get(f"https://api.iconify.design/{STICKER_SET}/{icon}.svg?height=256")
+            STICKER_DIR.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(svg)
+        return {"src": f"../cache/stickers/{icon}.svg"}
+    except Exception as e:  # noqa: BLE001 — the emoji character still shows
+        log(f"sticker lookup failed for {emoji or name!r}: {e}")
+        return None
+
+
+def resolve_stickers(cmd: dict) -> dict:
+    """Fill in "src" for every picture in a kids-mode op, in place. Call it
+    off the event loop (it may fetch). Anything not found keeps its emoji,
+    which the board draws as text."""
+    def one(item: dict) -> None:
+        if isinstance(item, dict) and item.get("emoji") and not item.get("src"):
+            hit = find_sticker(str(item["emoji"]), str(item.get("name") or ""))
+            if hit:
+                item["src"] = hit["src"]
+
+    def many(c: dict) -> None:
+        pics = c.get("emoji")
+        if isinstance(pics, list):
+            srcs = []
+            for p in pics:
+                hit = find_sticker(str(p)) if p else None
+                srcs.append(hit["src"] if hit else "")
+            c["srcs"] = srcs
+        else:
+            one(c)
+
+    op = cmd.get("op")
+    if op == "sticker":
+        one(cmd)
+    elif op in ("stickers", "pick"):
+        for it in cmd.get("items") or cmd.get("choices") or []:
+            one(it)
+    elif op == "frame":
+        many(cmd)
+    elif op == "story":
+        for fr in cmd.get("frames") or []:
+            if isinstance(fr, dict):
+                many(fr)
+    return cmd

@@ -28,7 +28,7 @@ DEFAULTS = {
                # Streaming-style sync: before speaking, wait (up to N s) for
                # the first K drawings to be ready; mid-answer, pause the voice
                # (up to M s) at a drawing that isn't ready yet. 0 disables.
-               "prebufferSeconds": 8, "prebufferVisuals": 3,
+               "prebufferSeconds": 4, "prebufferVisuals": 1,
                "visualWaitSeconds": 6,
                # Point at each new drawing as the voice starts on it.
                "followAlong": True,
@@ -44,19 +44,29 @@ DEFAULTS = {
                # "auto" follows the learner's language; or "en" / "ar"
                "teachLanguage": "auto",
                # Weekdays that don't break the streak, e.g. ["Fri"]
-               "restDays": []},
+               "restDays": [],
+               # Kids mode: characters and stickers instead of text, short
+               # chunks, and the whole answer (drawings included) is ready
+               # before it starts talking.
+               "kidsMode": False, "kidName": ""},
     # Pause the voice while a fight is on (from key-press rate and screen
     # motion; only while a full-screen game is in front).
     "lull": {"auto": True, "fightAt": 0.6, "calmAt": 0.3},
     # language: "en", "ar" or "auto" (Arabic and English). Anything but "en"
     # swaps an English-only model for multilingualModel.
     "stt": {"model": "distil-large-v3", "device": "auto", "language": "en",
-            "autoLanguages": ["en", "ar"], "multilingualModel": "large-v3-turbo"},
+            "autoLanguages": ["en", "ar"],
+            # Whisper large-v3-turbo fine-tuned on 13 Arabic dialects (incl.
+            # Saudi/Gulf); English still works. Apache-2.0.
+            "multilingualModel": "parseh/whisper-ar-dialectal-ct2"},
     # voice2: the co-host; voice3: role-play characters. Arabic lines go to
     # Supertonic 3 (arabicVoice "" = picked to match each Kokoro voice;
     # arabicDir "" = <modelsDir>/supertonic-3).
     "tts": {"engine": "kokoro", "voice": "af_heart", "speed": 1.0,
             "voice2": "bf_emma", "voice3": "am_michael",
+            # arabicEngine "saudi" = NAMAA Saudi voice on the GPU (falls back
+            # to Supertonic 3 on the CPU when it can't load).
+            "arabicEngine": "saudi", "saudiDir": "", "arabicExpressive": 0.5,
             "arabic": True, "arabicVoice": "", "arabicDir": "",
             "arabicThreads": 4, "arabicSteps": 5},
     "audio": {"inputDevice": None, "outputDevice": None, "endSilenceMs": 1600,

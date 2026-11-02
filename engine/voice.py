@@ -660,16 +660,27 @@ class TTS:
                                       steps=int(cfg.get("arabicSteps", 5)))
             except Exception as e:  # noqa: BLE001 — English still works
                 log(f"Arabic voice unavailable (English only): {e}")
+        # The Saudi voice (GPU) speaks Arabic when it loads; Supertonic (CPU)
+        # is the fallback.
+        self._saudi = None
+        if cfg.get("arabic", True) and cfg.get("arabicEngine", "saudi") == "saudi":
+            try:
+                from saudi_tts import SaudiTTS
+                self._saudi = SaudiTTS(
+                    Path(cfg.get("saudiDir") or models_dir / "namaa-saudi-tts"),
+                    float(cfg.get("arabicExpressive", 0.5)))
+            except Exception as e:  # noqa: BLE001
+                log(f"Saudi voice unavailable, using Supertonic: {e}")
         self._update_desc()
         self.synth("Ready.")  # first call is slow
-        if self._ar is not None:
+        if self._ar is not None and self._saudi is None:
             self.synth("جاهز.")
         log(f"TTS ready: {self.desc}")
 
     # ---------------------------------------------------------- settings
     @property
     def has_arabic(self) -> bool:
-        return self._ar is not None
+        return self._ar is not None or self._saudi is not None
 
     def voice_list(self) -> list[str]:
         """Kokoro voices, for the Settings dropdown."""
@@ -696,6 +707,7 @@ class TTS:
 
     def _update_desc(self) -> None:
         self.desc = f"Kokoro {self._voice}" + (
+            " + Arabic NAMAA Saudi" if getattr(self, "_saudi", None) else
             f" + Arabic Supertonic-3 {self.arabic_voice()}"
             if self._ar is not None else "")
 
@@ -737,6 +749,17 @@ class TTS:
         runs = script_runs(text)
         if not any(s == "ar" for s, _ in runs):
             return self._english(text, kv, speed)
+        if self._saudi is not None:
+            if is_arabic(text):
+                return self._saudi.synth(text)
+            gap = np.zeros(int(0.06 * TTS_RATE), np.float32)
+            parts = []
+            for s, t in runs:
+                pcm = _trim(self._saudi.synth(t) if s == "ar"
+                            else self._english(t, kv, speed))
+                if len(pcm):
+                    parts += [pcm, gap]
+            return np.concatenate(parts) if parts else                 np.zeros(int(0.15 * TTS_RATE), np.float32)
         if self._ar is None:
             if not self._ar_warned:
                 log("no Arabic voice installed: Arabic text is skipped "

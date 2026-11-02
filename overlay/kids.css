@@ -1,0 +1,243 @@
+/* Kids mode (body.kids): a friendlier board for a young child. A rounded
+   font that also covers Arabic (Baloo Bhaijaan 2, SIL Open Font Licence,
+   bundled locally), a bright storybook-night background that keeps every
+   existing colour readable, soft candy cards, and the kid ops from
+   board_kids.js (mascot, stickers, choice cards, stars, confetti, story).
+   Nothing here applies without body.kids except the .kd-* pieces, which
+   only exist in kids mode. */
+@import url("../node_modules/@fontsource/baloo-bhaijaan-2/500.css");
+@import url("../node_modules/@fontsource/baloo-bhaijaan-2/700.css");
+@import url("../node_modules/@fontsource/baloo-bhaijaan-2/800.css");
+
+body.kids {
+  --kid-font: "Baloo Bhaijaan 2", "Segoe UI", Tahoma, sans-serif;
+  --kid-ink: #ffffff;
+}
+
+/* ---------------------------------------------------------- the board */
+body.kids #panel {
+  background:
+    radial-gradient(120% 90% at 18% 0%, rgba(98, 112, 255, calc(var(--alpha) * 0.55)), transparent 60%),
+    radial-gradient(90% 80% at 100% 100%, rgba(186, 92, 214, calc(var(--alpha) * 0.45)), transparent 60%),
+    linear-gradient(165deg, rgba(36, 42, 112, var(--alpha)), rgba(52, 34, 104, var(--alpha)));
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 22px;
+}
+body.kids #board,
+body.kids #board [dir=rtl],
+body.kids #sub,
+body.kids .veil { font-family: var(--kid-font); }
+body.kids #caption { font-size: 1.12em; font-weight: 700; }
+
+body.kids #board .el.text,
+body.kids #board .el.bullet,
+body.kids #board .el.label { font-weight: 700; text-shadow: 0 2px 0 rgba(20, 16, 60, 0.55); line-height: 1.2; }
+body.kids #board .el.heading {
+  font-weight: 800; letter-spacing: 0; border: 0; padding: 0 30px 2px;
+  border-radius: 999px; background: rgba(255, 255, 255, 0.13);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.16);
+  text-shadow: 0 2px 0 rgba(20, 16, 60, 0.6);
+}
+body.kids .dot-b { width: 0.55em; height: 0.55em; border-radius: 35%; transform: translateY(-0.04em) rotate(12deg); box-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+body.kids #board .el.table { border-collapse: separate; border-spacing: 0 6px; font-weight: 600; }
+body.kids #board .el.table :is(th, td) { border: 0; background: rgba(255, 255, 255, 0.08); padding: 6px 18px; }
+body.kids #board .el.table :is(th, td):first-child { border-radius: 14px 0 0 14px; }
+body.kids #board .el.table :is(th, td):last-child { border-radius: 0 14px 14px 0; }
+body.kids #board .el.table[dir=rtl] :is(th, td):first-child { border-radius: 0 14px 14px 0; }
+body.kids #board .el.table[dir=rtl] :is(th, td):last-child { border-radius: 14px 0 0 14px; }
+body.kids #board .el.table th { background: rgba(255, 200, 87, 0.2); }
+body.kids #board .el.callout { border-radius: 18px; background: rgba(40, 34, 96, 0.96); }
+body.kids #board .el.code { border-radius: 14px; }
+body.kids #board .el.mock .card { border-radius: 18px; }
+/* Photos read as pictures stuck on the board. */
+body.kids #board figure.media:not(.icon) img {
+  border-radius: 18px; border: 5px solid #fff; background: #fff;
+  box-shadow: 0 8px 22px rgba(10, 6, 40, 0.5);
+}
+body.kids #board figure.media figcaption { font-size: 22px; font-weight: 700; }
+body.kids .spot-glow { filter: drop-shadow(0 0 10px rgba(255, 220, 120, 0.95)); }
+body.kids .veil { background: rgba(30, 26, 80, 0.8); }
+body.kids .veil-q { font-weight: 700; }
+
+/* ---------------------------------------------------- the kids layer */
+#board .kd-layer { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+#board .kd-hidden { display: none !important; }
+#board .kd-bit { position: absolute; display: block; margin: -5px 0 0 -5px; will-change: transform; }
+#board .kd-bit svg { display: block; }
+
+/* ------------------------------------------------------------ mascot */
+#board .kd-mascot { position: absolute; width: 150px; height: 165px; }
+#board .kd-mascot .kd-svg { overflow: visible; display: block; position: static; filter: drop-shadow(0 6px 6px rgba(10, 6, 40, 0.35)); }
+.kd-svg .kd-main { fill: var(--kd-main); }
+.kd-svg .kd-limb { fill: var(--kd-dark); }
+.kd-svg .kd-belly { fill: var(--kd-belly); opacity: 0.75; }
+.kd-svg .kd-shadow { fill: rgba(8, 4, 30, 0.35); }
+.kd-svg .kd-cheek { fill: #FF7FA8; opacity: 0.6; }
+.kd-svg .kd-white { fill: #fff; }
+.kd-svg .kd-ink { fill: #2A2140; }
+.kd-svg .kd-brow, .kd-svg .kd-happy { fill: none; stroke: #2A2140; stroke-width: 4.5; stroke-linecap: round; }
+.kd-svg .kd-mouth { fill: none; stroke: #2A2140; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+.kd-svg .kd-mouth.kd-open { fill: #3B1E3E; }
+.kd-svg .kd-tongue { fill: #FF7A95; }
+.kd-svg .kd-arm, .kd-svg .kd-brow, .kd-svg .kd-pupil, .kd-svg .kd-tilt, .kd-svg .kd-eyesize {
+  transition: transform 380ms cubic-bezier(.3, 1.5, .5, 1);
+}
+.kd-svg .kd-tilt { transform-origin: 100px 205px; }
+.kd-svg .kd-breath { transform-origin: 100px 205px; animation: kd-breathe 3.4s ease-in-out infinite; }
+@keyframes kd-breathe { 50% { transform: scale(1.018, 0.982); } }
+.kd-svg.talking .kd-breath { animation-duration: 1.1s; }
+.kd-svg .kd-blink { transition: transform 70ms ease; }
+.kd-svg.blink .kd-blink { transform: scaleY(0.08); }
+.kd-svg .kd-happy { opacity: 0; }
+.kd-svg.eyes-happy .kd-blink { opacity: 0; }
+.kd-svg.eyes-happy .kd-happy { opacity: 1; }
+.kd-svg.eyes-wide .kd-eyesize { transform: scale(1.14); }
+.kd-svg .kd-x { opacity: 0; transition: opacity 250ms ease; }
+.kd-svg .kd-x-think circle { fill: #fff; }
+.kd-svg .kd-x-q text { font: 800 46px var(--kid-font, sans-serif); fill: #FFC857; stroke: #2A2140; stroke-width: 2; paint-order: stroke; }
+.kd-svg .kd-x-spark { fill: #FFE07A; }
+.kd-svg .kd-x-sweat { fill: #9ED8FF; }
+.kd-svg .kd-x-waves path { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; }
+.kd-svg.x-think .kd-x-think, .kd-svg.x-q .kd-x-q, .kd-svg.x-spark .kd-x-spark,
+.kd-svg.x-sweat .kd-x-sweat, .kd-svg.x-waves .kd-x-waves { opacity: 1; }
+.kd-svg.x-think .kd-x-think circle { animation: kd-dot 1.2s ease-in-out infinite; }
+.kd-svg.x-think .kd-x-think circle:nth-child(2) { animation-delay: 0.2s; }
+.kd-svg.x-think .kd-x-think circle:nth-child(3) { animation-delay: 0.4s; }
+@keyframes kd-dot { 50% { opacity: 0.35; } }
+.kd-svg.x-spark .kd-x-spark path { transform-box: fill-box; transform-origin: center; animation: kd-twinkle 0.9s ease-in-out infinite; }
+.kd-svg.x-spark .kd-x-spark path:nth-child(even) { animation-delay: 0.45s; }
+@keyframes kd-twinkle { 50% { transform: scale(0.4) rotate(45deg); opacity: 0.5; } }
+.kd-svg.x-waves .kd-x-waves path { animation: kd-dot 1s ease-in-out infinite; }
+.kd-svg.x-waves .kd-x-waves path:nth-child(2) { animation-delay: 0.25s; }
+.kd-svg.x-q .kd-x-q { animation: kd-bob 1.6s ease-in-out infinite; }
+@keyframes kd-bob { 50% { transform: translateY(-5px); } }
+
+#board .kd-name, #board .kd-bubble {
+  position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap;
+  font: 800 24px var(--kid-font); color: #2A2140; background: #fff;
+  padding: 0 16px; border-radius: 999px; box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+}
+#board .kd-name { top: -26px; background: #FFFFFF; }
+#board .kd-bubble { top: -44px; font-size: 26px; background: #FFE07A; }
+
+/* ---------------------------------------------------------- stickers */
+#board .kd-sticker { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#board .kd-pic { display: flex; align-items: center; justify-content: center; line-height: 1; }
+/* A die-cut sticker: a white outline around the picture and a soft shadow. */
+#board .kd-sticker .kd-pic, #board .kd-panel .kd-actor {
+  filter: drop-shadow(3px 0 0 #fff) drop-shadow(-3px 0 0 #fff) drop-shadow(0 3px 0 #fff) drop-shadow(0 -3px 0 #fff)
+          drop-shadow(0 7px 8px rgba(10, 6, 40, 0.45));
+}
+#board .kd-pic.kd-many { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 8px; }
+/* style.css stretches every board svg over the board; kid pieces are inline. */
+#board [class*="kd-"] svg { position: static; inset: auto; }
+#board .kd-emo { font-family: "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif; line-height: 1; display: flex; align-items: center; justify-content: center; overflow: visible; }
+#board .kd-img { display: block; object-fit: contain; }
+#board .kd-sticker figcaption {
+  font-family: var(--kid-font, inherit); font-weight: 800; line-height: 1.1; text-align: center;
+  padding: 2px 16px 0; border-radius: 999px; background: rgba(255, 255, 255, 0.14);
+  text-shadow: 0 2px 0 rgba(20, 16, 60, 0.5); white-space: nowrap;
+}
+
+/* ------------------------------------------------- choice cards (pick) */
+#board .kd-q {
+  font: 800 34px var(--kid-font, inherit); color: #fff; text-align: center; line-height: 1.2;
+  text-shadow: 0 2px 0 rgba(20, 16, 60, 0.55);
+}
+#board .kd-card-pick {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  padding: 22px 10px 14px; border-radius: 26px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--kd-c) 34%, #2b2770), var(--kd-c2));
+  border: 5px solid var(--kd-c);
+  box-shadow: 0 8px 0 color-mix(in srgb, var(--kd-c) 45%, #0e0b30), 0 14px 24px rgba(8, 4, 30, 0.4);
+  transition: opacity 300ms ease, filter 300ms ease;
+}
+#board .kd-card-pick .kd-pic { filter: drop-shadow(0 6px 6px rgba(10, 6, 40, 0.4)); }
+#board .kd-card-pick .kd-word {
+  font: 800 32px var(--kid-font, inherit); color: #fff; line-height: 1.1; text-align: center;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+#board .kd-card-pick.kd-wordonly { min-height: 160px; }
+#board .kd-card-pick.kd-wordonly .kd-word { font-size: 44px; }
+#board .kd-badge {
+  position: absolute; top: -16px; inset-inline-start: -14px; width: 42px; height: 42px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font: 800 26px/1 var(--kid-font, inherit); color: #2A2140; background: #fff;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25); padding-top: 3px;
+}
+#board .kd-card-pick .kd-badge { background: var(--kd-c); color: #fff; border: 4px solid #fff; text-shadow: 0 1px 0 rgba(0,0,0,0.3); }
+#board .kd-card-pick.kd-right { border-color: #5BE49B; box-shadow: 0 0 0 6px rgba(91, 228, 155, 0.45), 0 0 34px rgba(91, 228, 155, 0.7), 0 8px 0 #1f7a4d; }
+#board .kd-card-pick.kd-wrong { opacity: 0.55; filter: saturate(0.45); }
+#board .kd-card-pick.kd-dim { opacity: 0.4; filter: saturate(0.3); }
+#board .kd-tick {
+  position: absolute; top: -18px; inset-inline-end: -16px; width: 54px; height: 54px; border-radius: 50%;
+  background: #2FBF71; border: 4px solid #fff; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25); animation: kd-tick 500ms cubic-bezier(.2, 1.6, .4, 1) backwards;
+}
+@keyframes kd-tick { from { transform: scale(0) rotate(-40deg); } }
+
+/* -------------------------------------------------------- star meter */
+#board .kd-stars {
+  position: absolute; top: 12px; right: 14px; display: flex; align-items: center; gap: 2px;
+  padding: 6px 12px; border-radius: 999px; background: rgba(20, 16, 60, 0.55);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.14);
+}
+#board .kd-stars[dir=rtl] { right: auto; left: 14px; }
+#board .kd-stars b { font: 800 30px/1 var(--kid-font, inherit); color: #FFE07A; padding: 4px 4px 0; }
+#board .kd-star { display: block; overflow: visible; }
+#board .kd-star path:first-child { stroke-width: 1.6; }
+#board .kd-star.on path:first-child { fill: #FFC93C; stroke: #E8932A; }
+#board .kd-star.off path:first-child { fill: rgba(255, 255, 255, 0.12); stroke: rgba(255, 255, 255, 0.35); }
+#board .kd-star .kd-star-shine { fill: none; stroke: #FFF6C8; stroke-width: 1.8; stroke-linecap: round; }
+#board .kd-star.off .kd-star-shine { display: none; }
+#board .kd-flystar { position: absolute; width: 96px; height: 96px; filter: drop-shadow(0 0 16px rgba(255, 210, 80, 0.9)); }
+
+/* --------------------------------------------------------- story strip */
+#board .kd-panel {
+  border-radius: 24px; overflow: hidden; border: 5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 18px rgba(8, 4, 30, 0.45);
+  display: flex; flex-direction: column; overflow: visible;
+  transition: transform 300ms ease, box-shadow 300ms ease;
+}
+#board .kd-panel.kd-empty { border: 4px dashed rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.05); box-shadow: none; }
+#board .kd-panel.kd-now { box-shadow: 0 0 0 5px #FFE07A, 0 10px 24px rgba(8, 4, 30, 0.5); }
+#board .kd-panel .kd-cast { flex: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: space-evenly; padding: 18px 10px 14px; }
+#board .kd-panel .kd-actor { display: block; }
+#board .kd-panel .kd-cap {
+  margin: 0 10px 10px; padding: 4px 12px 0; border-radius: 16px; background: #fff; color: #2A2140;
+  font: 800 26px/1.2 var(--kid-font, inherit); text-align: center; min-height: 40px;
+}
+#board .kd-bg-plain { background: linear-gradient(180deg, #4b55c9, #3b3a9e); }
+#board .kd-bg-sky { background: linear-gradient(180deg, #7cc6ff 0%, #bfe6ff 70%, #9be08a 70%, #6cc764 100%); }
+#board .kd-bg-grass { background: linear-gradient(180deg, #8fd3ff 0%, #d4efff 55%, #7ed46f 55%, #4fb04a 100%); }
+#board .kd-bg-sea { background: linear-gradient(180deg, #8fd3ff 0%, #c9ecff 40%, #3aa0e8 40%, #1d6fc4 100%); }
+#board .kd-bg-space { background: radial-gradient(circle at 70% 25%, #4a3a9a, #140f3a 70%); }
+#board .kd-bg-night { background: linear-gradient(180deg, #1c2366 0%, #3b3f9e 70%, #2b5a4a 70%, #1e4136 100%); }
+#board .kd-bg-desert { background: linear-gradient(180deg, #ffc98a 0%, #ffe6c2 58%, #f2b766 58%, #d9934a 100%); }
+#board .kd-bg-home { background: linear-gradient(180deg, #ffe2c9 0%, #fff1e3 68%, #d79b6b 68%, #b97a4c 100%); }
+#board .kd-bg-school { background: linear-gradient(180deg, #e8f4ff 0%, #ffffff 68%, #c9a77c 68%, #a9845a 100%); }
+#board .kd-bg-city { background: linear-gradient(180deg, #a9d8ff 0%, #e2f2ff 62%, #9aa3b5 62%, #737c90 100%); }
+
+/* The question veil in kids mode: no text, the board just steps back while
+   the mascot (above it, in the kids layer) thinks. */
+body.kids .veil.kd-veil { background: rgba(24, 20, 70, 0.32); }
+/* The mascot floats over the board; over a drawing it steps back a little. */
+#board .kd-mascot { transform-origin: 90% 100%; transition: scale 320ms ease, opacity 320ms ease; }
+#board .kd-mascot.kd-over { scale: 0.74; opacity: 0.9; }
+
+/* ------------------------------------------------- props (kids_props.js) */
+#board .kp { position: absolute; }
+#board .kp > svg { position: static; inset: auto; display: block; width: 100%; height: 100%; overflow: visible; }
+#board .kp text { user-select: none; }
+#board .kp .kp-mouth { fill: none; stroke: #2A2140; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+#board .kp .kp-mouth.kp-open { fill: #7A2E3A; }
+#board .kp .kp-eye-happy { opacity: 0; }
+#board .kp .kp-happyeyes .kp-eye { opacity: 0; }
+#board .kp .kp-happyeyes .kp-eye-happy { opacity: 1; }
+#board .kp .kp-think circle { animation: kd-dot 1.2s ease-in-out infinite; }
+#board .kp .kp-think circle:nth-child(2) { animation-delay: .2s; }
+#board .kp .kp-think circle:nth-child(3) { animation-delay: .4s; }
+#board .kp .kp-glow { filter: drop-shadow(0 0 6px #FFE07A) drop-shadow(0 0 12px rgba(255, 224, 122, .8)); }
+#board .kp .kp-soft { opacity: .32; transition: opacity 350ms ease; }
+#board .kp .kp-arm { transition: transform 420ms cubic-bezier(.3, 1.4, .5, 1); }
+#board .kp .kp-dull { filter: saturate(.25) brightness(1.08); transition: filter 400ms ease; }

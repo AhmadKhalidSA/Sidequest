@@ -59,6 +59,26 @@ def prompt_file(name: str, text: str) -> dict:
     return {"type": "file", "path": str(path)}
 
 
+def with_kids(cfg: dict, prompt: str, illustrator: bool = False) -> str:
+    """Kids mode adds its own rules and board ops to a prompt."""
+    lesson = cfg.get("lesson", {})
+    if not lesson.get("kidsMode"):
+        return prompt
+    try:
+        from kids_prompt import KIDS_REFERENCE, KIDS_RULES
+    except ImportError:
+        return prompt
+    if illustrator:
+        return (prompt + "\n\n# Kids mode\nThe learner is a young child. "
+                "Characters, stickers and bright, simple scenes; almost no "
+                "words on the board.\n" + KIDS_REFERENCE)
+    name = str(lesson.get("kidName") or "").strip()
+    return (prompt + "\n\n# KIDS MODE (overrides the rules above where they "
+            "differ)\n" + KIDS_RULES
+            + (f"\nThe child's name is {name}." if name else "")
+            + "\n" + KIDS_REFERENCE)
+
+
 class StreamSplitter:
     """Turns raw text deltas into say/board items. A line starting with '@'
     is a board command (held until its newline arrives). Anything else is
@@ -294,7 +314,8 @@ class Director:
         brain = cfg.get("brain", {})
         self._options = ClaudeAgentOptions(
             model=brain.get("directorModel", "sonnet"),
-            system_prompt=prompt_file("illustrator", DIRECTOR_PROMPT),
+            system_prompt=prompt_file("illustrator", with_kids(
+                cfg, DIRECTOR_PROMPT, illustrator=True)),
             tools=[],
             allowed_tools=[],
             cwd=str(cwd),
@@ -356,7 +377,7 @@ class Tutor:
         brain = cfg.get("brain", {})
         self._options = ClaudeAgentOptions(
             model=brain.get("model", "sonnet"),
-            system_prompt=prompt_file("tutor", SYSTEM_PROMPT),
+            system_prompt=prompt_file("tutor", with_kids(cfg, SYSTEM_PROMPT)),
             # Files in the course folder (material, plan, notes), screenshots
             # (Read handles images), and the web for anything current.
             tools=["Read", "Glob", "Grep", "Write", "Edit", "WebSearch",

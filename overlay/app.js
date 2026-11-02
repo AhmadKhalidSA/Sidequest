@@ -20,7 +20,7 @@ let earsOn = true;
 let plan = null;
 let progress = null;
 let ranks = {};
-const toggles = { teachback: false, socratic: false, cohost: false, busy: false };
+const toggles = { teachback: false, socratic: false, cohost: false, busy: false, kids: false };
 let outline = '';
 let interactive = false;
 let state = 'loading';
@@ -61,6 +61,7 @@ const STATUS = {
 };
 
 function setStatus(s, detail) {
+  if (s !== 'speaking' && state === 'speaking') board.onSilence?.();
   state = s;
   $('dot').className = `dot ${s}`;
   $('status').textContent = (STATUS[s] || (() => s))(detail);
@@ -160,6 +161,9 @@ const SETTINGS = [
       options: [[true, 'Lecture: keeps teaching while you\'re quiet'], [false, 'Wait: answers, then waits for you']] },
     { path: 'lesson.autoContinueSeconds', label: 'Quiet seconds before it continues', type: 'number', min: 1, max: 30, step: 1, help: 'Lecture mode only' },
     { path: 'lesson.maxAutoChunks', label: 'Stop after this many chunks without hearing you', type: 'number', min: 0, max: 99, step: 1, help: '0 = never stop (until you talk)' },
+    { path: 'lesson.kidsMode', label: 'Kids mode', type: 'select', help: 'Characters, pictures and props instead of text, for a young child',
+      options: [[false, 'Off'], [true, 'On']] },
+    { path: 'lesson.kidName', label: "Child's name", type: 'text', help: 'Kids mode: the tutor uses it' },
     { path: 'lesson.teachLanguage', label: 'Teaching language', type: 'select',
       options: [['auto', 'Follow me (the language I speak)'], ['en', 'English'], ['ar', 'Arabic']] },
     { path: 'lesson.persona', label: 'Tutor personality', type: 'select',
@@ -310,7 +314,7 @@ function saveSettings() {
     else if (input.dataset.type === 'number' || input.dataset.type === 'range') v = parseFloat(input.value);
     else if (input.dataset.type === 'list') {
       v = input.value.split(/[,\s]+/).filter(Boolean).map((d) => d.slice(0, 1).toUpperCase() + d.slice(1, 3).toLowerCase());
-    } else v = input.value.trim().toUpperCase();
+    } else v = path.startsWith('keys.') ? input.value.trim().toUpperCase() : input.value.trim();
     if (JSON.stringify(v) === JSON.stringify(getPath(settingsData.cfg, path))) continue;
     const keys = path.split('.');
     let o = patch;
@@ -400,6 +404,11 @@ function onEngine(ev) {
       $('caption').classList.remove('faded');
       $('caption').textContent = ev.text;
       $('caption').dataset.speaker = ev.speaker || '';
+      board.onSay?.(ev.text, ev.speaker || '');
+      break;
+    case 'kids':
+      document.body.classList.toggle('kids', !!ev.on);
+      setToggle('kids', !!ev.on);
       break;
     case 'deck': {
       const bits = [];
@@ -426,6 +435,7 @@ function onEngine(ev) {
       for (const k of ['teachback', 'socratic']) setToggle(k, (ev.on || []).includes(k));
       break;
     case 'interrupted':
+      board.onSilence?.();
       $('caption').classList.add('faded');
       break;
     case 'board': {
@@ -458,6 +468,9 @@ function onEngine(ev) {
       const sel = $('course');
       sel.innerHTML = (ev.list.length ? '' : '<option value="">(no courses yet)</option>') +
         ev.list.map((c) => `<option ${c === ev.current ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+      if (ev.current && $('caption').textContent.startsWith(`Press ${keys.interact}`)) {
+        $('caption').textContent = '';   // a course is open now: drop the hint
+      }
       if (!ev.current) {
         $('caption').textContent = ev.list.length
           ? `Press ${keys.interact} and pick a course to start.`

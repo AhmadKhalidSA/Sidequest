@@ -80,12 +80,43 @@ sliders it moves as it talks, maps with routes, sheet music that plays, molecule
 Python code that really runs, one line at a time, with its variables. The simulations and the
 Python run sandboxed, with no network and no access to your files.
 
+### Kids mode
+
+*"Kids mode"* (or the Kids mode button) turns the board into a picture book for a young child:
+a mascot that talks with the voice, big stickers, picture choice cards answered out loud, stars
+and confetti for right answers, and comic-strip stories.
+
+It also has a library of ready-made, hand-drawn **props**, so the tutor doesn't have to draw
+common things from scratch (slowly, and never quite right). It calls them by name and they
+appear at once, without the network, and move to show the idea:
+
+- **People and places:** a teacher (in hijab and abaya, or in thobe and shemagh, whose mouth moves
+  with the voice), kids in Saudi school uniform, a classroom whiteboard, a majlis at home, a
+  baqala with prices in riyals, a park, and space.
+- **Math:** place-value houses with base-ten blocks (ten ones join into a ten and move house), the
+  comparison crocodile that eats the bigger number, ten-frames, counting, a number line with a
+  hopping frog, fractions (pizza, kabsa, bars), a clock, Saudi riyal notes and coins, shapes
+  with their sides counted, a ruler, a balance, bar charts, and equal groups for multiplying.
+- **Language:** Arabic letter cards (the letter writes itself, its forms, and a word with the
+  letter coloured) and English letter cards.
+- **Science:** a plant growing stage by stage, the water cycle, the planets and the Earth's orbit,
+  animals with their parts, day and night, and ice turning to water and steam.
+
+Arabic boards get Arabic labels and Arabic digits (٣٤٧). The props live in
+`overlay/kids_props.js`; the list the tutor sees is in `engine/kids_prompt.py`.
+
 ### Arabic and English
 
 It teaches in English or Arabic: it follows the language you speak, or you pick one in
 Settings. Set *Language you speak* to *Both* so it understands you in either. Arabic is spoken
 by [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (Modern Standard Arabic,
 five female and five male voices, on the CPU), and the board lays Arabic out right to left.
+With an NVIDIA GPU you can use a dialect voice instead,
+[NAMAA-Saudi-TTS](https://huggingface.co/NAMAA-Space/NAMAA-Saudi-TTS) (about 3 GB of VRAM):
+run `.venv\Scripts\python -m pip install chatterbox-tts` with a CUDA build of PyTorch, and
+Sidequest picks it up on the next launch, downloading about 3 GB of model files. Arabic speech
+recognition uses a [Whisper fine-tuned on 13 Arabic dialects](https://huggingface.co/parseh/whisper-ar-dialectal-ct2),
+including Saudi and Gulf, which still understands English.
 For language practice it can say a phrase, have you repeat it, and score your pronunciation
 word by word and sound by sound. The sound-by-sound scoring is decent for English and rough
 for Arabic.
@@ -238,12 +269,13 @@ ones:
 | `brain.model` | `sonnet` | The tutor. `haiku` is faster and lighter on usage; `opus` explains better but is slower. |
 | `brain.plannerModel` | `opus` | Designs the course once per plan, in the background. |
 | `brain.directorModel` | `sonnet` | The illustrator that builds animated scenes. |
-| `lesson.prebufferSeconds` | `8` | How far ahead it prepares speech and drawings before it starts talking. `0` starts faster but the board may lag. |
+| `lesson.prebufferSeconds` | `4` | How far ahead it prepares speech and drawings before it starts talking. `0` starts faster but the board may lag. |
 | `lesson.followAlong` | `true` | The pointer that tracks the current sentence. |
 | `lesson.teachLanguage` | `auto` | `auto` answers in the language you speak; or `en` / `ar`. |
 | `lesson.persona` | `default` | `hype`, `dry` or `calm`. |
 | `lesson.difficulty` / `lesson.humor` | `3` / `3` | 1–5. Also set by voice. |
 | `lesson.cohost` | `false` | The second voice. |
+| `lesson.kidsMode` / `lesson.kidName` | `false` / `""` | Kids mode, and the child's name. |
 | `lesson.warmStart` | `true` | Prepares the session opening at launch (one background turn per launch). |
 | `lesson.restDays` | `[]` | Weekdays that don't break the streak, e.g. `["Fri"]`. |
 | `lull.auto` / `lull.fightAt` | `true` / `0.6` | Pause during fights, and how easily. Lower pauses sooner. |
@@ -253,6 +285,8 @@ ones:
 | `tts.voice` / `tts.speed` | `af_heart` / `1.0` | Any Kokoro voice: `am_adam`, `bf_emma`, `bm_george`... |
 | `tts.voice2` / `tts.voice3` | `bf_emma` / `am_michael` | The co-host's voice, and role-play characters'. |
 | `tts.arabicVoice` | `""` | `F1`–`F5` or `M1`–`M5`; `""` picks one to match each English voice. |
+| `tts.arabicEngine` | `saudi` | `saudi` if it can load (see above), else Supertonic. `supertonic` always uses Supertonic. |
+| `watch` | `false` | Saves a picture of the panel every 3 s into `logs/watch`, for reviewing a session. |
 | `keys.*` | `MOUSE5`, `F6`–`F10` | Also `MOUSE4`, `MOUSE3`, `F1`–`F24`, letters, `INSERT`, `NUMPAD0`... `""` leaves a key unbound. |
 | `mirror.enabled` | `false` | Serves the board to a phone, tablet or second monitor on your network. |
 | `modelsDir` | `models/` | Where the Kokoro voice files live. |

@@ -40,14 +40,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import config  # noqa: E402
 from keys import KeyWatcher, pretty  # noqa: E402
+from media import KIDS_MEDIA_OPS  # noqa: E402
 from prompts import (BUTTONS, CONTINUE, KICKOFF, MISSED, MODES,  # noqa: E402
                      NO_MATERIAL_KICKOFF, PLAN_READY, PLANNING_KICKOFF,
                      SESSION_END, WARMUP)
 
 # Instant acknowledgements. Real words only: the voice mangles "Mm-hm".
-ACKS = ["Okay.", "Sure.", "Got it.", "Right.", "Okay, one sec.",
-        "Good question.", "Let me think."]
+# A thinking sound, never a judgement: "good question" was wrong whenever
+# the learner was answering, not asking.
+ACKS = ["Hmm.", "Hmm, okay.", "Mm, let me see.", "Okay, hmm.", "Hmm, let's see."]
 NUDGES = ["One sec, getting it ready.", "Almost there."]
+# The same, when it teaches in Arabic.
+ACKS_AR = ["اممم.", "طيب، اممم.", "خلني أشوف.", "اممم، طيب.", "همم، خلني أشوف."]
+NUDGES_AR = ["لحظة، أجهّز لك.", "قرّبنا."]
 NUDGE_AFTER = 7.0
 # Board ops that don't draw anything (they don't count as buffered visuals).
 NON_VISUAL = {"clear", "section", "result", "quiz", "erase", "unfocus",
@@ -109,7 +114,9 @@ RESUME = re.compile(r"^(continue|go on|resume|keep going|carry on|go ahead|"
                     r"unpause|let's go|next)\b|^(كمل|كمّل|يلا|استمر)(\W|$)",
                     re.I)
 START = re.compile(r"^(ok(ay)?[,.!]?\s*)?(so\s+)?(let'?s |lets |can we |shall we )?"
-                   r"(start|begin|get started|kick off)\b", re.I)
+                   r"(start|begin|get started|kick off)\b"
+                   r"|^(تمام\s+|طيب\s+)?(يلا\s+)?(نبدأ|نبدا|ابدأ|ابدا|خلنا نبدأ|خلنا نبدا)"
+                   r"(\W|$)", re.I)
 # "let's learn about X" / "teach me X" / "new topic: X" -> a course for X, made
 # on the spot, planned from knowledge (and the web, if it's new).
 LEARN_NEW = re.compile(
@@ -117,6 +124,9 @@ LEARN_NEW = re.compile(
     r"(?:let'?s |lets |i want to |i'?d like to |i wanna |can we |could we )"
     r"(?:learn|study)(?: about| something about| more about)?"
     r"|teach me(?: about)?|new (?:topic|course|subject)[:,]?(?: about)?"
+    r"|(?:يلا |طيب )?(?:خلنا|خلينا|ابغى|أبغى|ابي|أبي|ودي)\s+(?:نتعلم|اتعلم|أتعلم|"
+    r"ندرس|ادرس|أدرس)(?: عن| شي عن)?"
+    r"|علمني(?: عن)?|درسني(?: عن)?|اشرح لي عن"
     r")\s+(?P<topic>.{3,120})$", re.I)
 MERGE_WINDOW = 15.0   # s: a sentence spoken before the tutor starts answering
                       # belongs to the same question
@@ -174,6 +184,10 @@ END_SESSION = cmd(r"that'?s (it|all) for today|end (the )?session|"
                   r"i'?m done( for today)?|let'?s stop (here|for today)")
 BREAK_SCREEN = cmd(r"this is a break|this is downtime|learn this screen|"
                    r"remember this screen")
+KIDS_ANY = re.compile(r"kids? mode|وضع الأطفال|وضع الاطفال", re.I)
+KIDS_ON = cmd(r"kids? mode|turn on kids? mode|وضع الأطفال|وضع الاطفال")
+KIDS_OFF = cmd(r"(normal|adult|grown-?up) mode|kids? mode off|turn off kids? mode|"
+               r"الوضع العادي")
 EXPORT_ANKI = cmd(r"export (it |this )?(to |my )?(anki|flash ?cards|deck)")
 # "Other voice" cycles through these (Kokoro names).
 VOICE_CYCLE = ["af_heart", "am_michael", "bf_emma", "bm_george", "af_bella"]
@@ -392,6 +406,8 @@ class Engine:
         self.start_keys()
         emit("ears", on=True)
         emit("mode", auto=bool(self.cfg["lesson"].get("autoContinue")))
+        emit("kids", on=self.kids())
+        self.voice_style()
         courses = list_courses()
         if not courses:
             # Nothing to pick: a blank course, so "let's learn about X" or
@@ -462,12 +478,15 @@ class Engine:
         return self.tts.synth(text, voice) if voice else self.tts.synth(text)
 
     async def make_clips(self) -> None:
+        arabic = (self.cfg["lesson"].get("teachLanguage") == "ar"
+                  and getattr(self.tts, "has_arabic", False))
         self.acks = await asyncio.to_thread(
-            lambda: [self.tts.synth(t) for t in ACKS])
+            lambda: [self.tts.synth(t) for t in (ACKS_AR if arabic else ACKS)])
         self.nudge_clips = await asyncio.to_thread(
-            lambda: [self.tts.synth(t) for t in NUDGES])
-        self.where_clip = await asyncio.to_thread(self.tts.synth,
-                                                  "So, where was I.")
+            lambda: [self.tts.synth(t)
+                     for t in (NUDGES_AR if arabic else NUDGES)])
+        self.where_clip = await asyncio.to_thread(
+            self.tts.synth, "وين وقفنا؟" if arabic else "So, where was I.")
 
     def set_voice(self, voice: str | None = None,
                   speed: float | None = None) -> None:
@@ -631,11 +650,16 @@ class Engine:
         if "tts" in patch:
             self.set_voice(self.cfg["tts"].get("voice"),
                            float(self.cfg["tts"].get("speed", 1.0)))
-            await self.make_clips()
+        if "tts" in patch or "teachLanguage" in patch.get("lesson", {}):
+            await self.make_clips()   # voice or language of the quick replies
         if "lesson" in patch or "tts" in patch:
             self.style_dirty = True
         if "lull" in patch:
             self.start_lull()
+        if (old["lesson"].get("kidsMode") != self.cfg["lesson"].get("kidsMode")
+                or old["lesson"].get("kidName")
+                != self.cfg["lesson"].get("kidName")):
+            await self.set_kids(self.kids(), greet=False)
         if "endSilenceMs" in patch.get("audio", {}):
             from voice import FRAME_MS
             self.ears._end_frames = max(
@@ -987,6 +1011,11 @@ class Engine:
             emit("heard", text=text, turn=True)
             self.catch_up()
             return True
+        if KIDS_ANY.search(text) and not self.kids() and not s:
+            # "...let's go into kids mode and teach me X": switch, then the
+            # tutor still answers the whole request.
+            await self.set_kids(True, greet=False)
+            return False
         if not s:
             return False
         if BUSY_CMD.match(text):
@@ -1050,6 +1079,9 @@ class Engine:
         elif EXPORT_ANKI.match(text):
             heard()
             await self.export_anki()
+        elif KIDS_OFF.match(text) or KIDS_ON.match(text):
+            emit("heard", text=text, turn=True)
+            await self.set_kids(not KIDS_OFF.match(text))
         else:
             # Difficulty and humour dials: remember them, and let the tutor
             # hear the request too so it adjusts right away.
@@ -1087,6 +1119,47 @@ class Engine:
         else:
             self.start_turn(MODES["busy_off"])
         self.player.start_clip(random.choice(self.acks))
+
+    def kids(self) -> bool:
+        return bool(self.cfg["lesson"].get("kidsMode"))
+
+    async def set_kids(self, on: bool, greet: bool = True) -> None:
+        """Kids mode changes the tutor's and illustrator's instructions, so
+        both reconnect (the conversation itself carries on)."""
+        if on != self.kids():
+            self.save_user_config({"lesson": {"kidsMode": on}})
+        emit("kids", on=on)
+        self.voice_style()
+        emit("toast", text="Kids mode on" if on else "Kids mode off")
+        await self.reconnect_brains()
+        if greet and self.course:
+            self.paused = False
+            self.start_turn(
+                "[sidequest] Kids mode is now on: a child is learning now. "
+                "Say hello in two short, warm sentences with your mascot on a "
+                "fresh board, and ask their name if you don't know it."
+                if on else "[sidequest] Kids mode is off: back to the normal "
+                "style. One line, then carry on.")
+            self.player.start_clip(random.choice(self.acks))
+
+    def voice_style(self) -> None:
+        """Kids get a livelier Arabic delivery from the same voice."""
+        saudi = getattr(self.tts, "_saudi", None)
+        if saudi:
+            base = float(self.cfg["tts"].get("arabicExpressive", 0.5))
+            saudi.exaggeration = max(base, 0.75) if self.kids() else base
+
+    async def reconnect_brains(self) -> None:
+        self.interrupt()
+        self.drop_warm()
+        if self.tutor:
+            await self.tutor.stop()
+            self.tutor = None
+        if self.director:
+            stale, self.director = self.director, None
+            asyncio.create_task(stale.stop())
+        asyncio.create_task(self.start_director())
+        asyncio.create_task(self.ensure_tutor(quiet=True))
 
     def set_mode_flag(self, name: str, on: bool) -> None:
         (self.modes.add if on else self.modes.discard)(name)
@@ -1326,7 +1399,7 @@ class Engine:
             name = msg.get("name")
             if name in ("rapid", "roleplay", "missed", "end", "break", "anki",
                         "busy", "rewind", "live", "teachback", "socratic",
-                        "cohost"):
+                        "cohost", "kids"):
                 await self.on_mode_button(name)
             elif name == "pause":
                 if self.paused:
@@ -1410,6 +1483,8 @@ class Engine:
             self.set_mode_flag(name, name not in self.modes)
         elif name == "cohost":
             self.set_cohost(not self.cfg["lesson"].get("cohost"))
+        elif name == "kids":
+            await self.set_kids(not self.kids())
 
     async def add_youtube(self, ids: list[str], text: str) -> None:
         """A pasted YouTube link: save its transcript as material and teach
@@ -1715,6 +1790,11 @@ class Engine:
                 r"[؀-ۿ]", text) else "en"))
             self.shadow = {"text": text, "lang": lang} if text else None
             return
+        if op == "pick":           # a kids picture question counts as a quiz
+            op, cmd = "quiz", {"q": cmd.get("q") or " / ".join(
+                str(c.get("label", "")) for c in cmd.get("choices", []))}
+        elif op == "answer" and not cmd.get("retry"):
+            op, cmd = "result", {"correct": cmd.get("chose") == cmd.get("right")}
         if op == "quiz":
             self.flush_grade()
             self.last_quiz = str(cmd.get("q", ""))
@@ -1958,6 +2038,16 @@ class Engine:
                         value.setdefault("id", f"scene{self.turn}_{self.scene_n}")
                         queue.put(("scene", value, self.start_scene(value)))
                         continue
+                    if value.get("op") in KIDS_MEDIA_OPS:
+                        # Kids stickers: colour Fluent Emoji, fetched (and
+                        # cached) ahead of the voice like any picture.
+                        import media
+                        task = asyncio.create_task(asyncio.to_thread(
+                            media.resolve_stickers, value))
+                        queue.put(("media", value, task))
+                        if value.get("op") == "pick":
+                            queue.asked = True    # waits for her answer
+                        continue
                     if value.get("op") in ("image", "icon"):
                         # Fetch NOW, while the voice is still sentences
                         # behind; by the time it gets here it's usually ready.
@@ -2064,7 +2154,7 @@ class Engine:
         return {**cmd, **(hit or {"failed": True})}
 
     MOTION_OPS = {"scene", "counter", "pulse", "msg", "plotadd", "fx", "move",
-                  "anim", "annotate", "cursor"}
+                  "anim", "annotate", "cursor", "prop", "propset"}  # kids props animate themselves
 
     def note_visual(self, cmd: dict, flags: dict) -> None:
         op = cmd.get("op")
@@ -2207,7 +2297,7 @@ class Engine:
                 # A scene IS the explanation: worth a longer wait for its
                 # first pieces (the rest keep streaming in while it talks).
                 await self.gate(turn, lambda: bool(fut.ops) or fut.done,
-                                wait_limit * 1.5)
+                                min(wait_limit, 4.0))
             if turn != self.turn:
                 return
             m = self.measure
@@ -2249,6 +2339,7 @@ class Engine:
                                        "failed": True, "append": True,
                                        "brief": job.brief})
             elif kind == "media":
+                self.track(value)
                 if fut.done() and not fut.cancelled():
                     emit("board", cmd=fut.result())
                 else:
